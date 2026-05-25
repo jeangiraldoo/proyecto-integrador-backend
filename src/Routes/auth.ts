@@ -48,4 +48,38 @@ router.post("/signup", async (req, res) => {
 	}
 });
 
+router.post("/complete-profile", async (req, res) => {
+	const { idToken, username } = req.body;
+
+	try {
+		const decoded = await auth.verifyIdToken(idToken);
+		const uid = decoded.uid;
+
+		const existing = await db.collection("users").where("username", "==", username).limit(1).get();
+
+		if (!existing.empty) {
+			return res.status(400).json({
+				error: "USERNAME_ALREADY_EXISTS",
+				code: "auth/username-already-exists",
+			});
+		}
+
+		await db.collection("users").doc(uid).set(
+			{
+				username,
+				profileComplete: true,
+			},
+			{ merge: true },
+		);
+
+		return res.json({
+			message: "Profile completed",
+		});
+	} catch (error: any) {
+		return res.status(401).json({
+			error: error.code || error.message,
+		});
+	}
+});
+
 export default router;
