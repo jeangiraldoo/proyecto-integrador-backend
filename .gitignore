@@ -32,6 +32,7 @@ nvim/
 # << Environment >>
 **/.env
 **/.env.*
+serviceAccount.json
 !.env.example
 !.env.template
 tags
