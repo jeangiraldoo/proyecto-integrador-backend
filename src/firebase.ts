@@ -1,7 +1,8 @@
 import admin from "firebase-admin";
 import { Auth } from "firebase-admin/auth";
 import { Firestore } from "firebase-admin/firestore";
-import serviceAccount from "../serviceAccount.json";
+
+const serviceAccount = require("../serviceAccount.json");
 
 const firebaseConfig = {
 	apiKey: process.env.apiKey as string,
