@@ -2,7 +2,117 @@ import { Router } from "express";
 import { auth, db } from "../firebase";
 
 const router = Router();
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     SignupRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *         - lastName
+ *         - username
+ *         - email
+ *         - password
+ *       properties:
+ *         name:
+ *           type: string
+ *           example: Jean
+ *         lastName:
+ *           type: string
+ *           example: Giraldo
+ *         username:
+ *           type: string
+ *           example: jeang
+ *         email:
+ *           type: string
+ *           format: email
+ *           example: jean@example.com
+ *         password:
+ *           type: string
+ *           format: password
+ *           example: MySecurePassword123
+ *
+ *     SignupSuccess:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *           example: User created
+ *         uid:
+ *           type: string
+ *           example: abc123xyz
+ *
+ *     CompleteProfileRequest:
+ *       type: object
+ *       required:
+ *         - idToken
+ *         - username
+ *       properties:
+ *         idToken:
+ *           type: string
+ *           description: Firebase ID token
+ *         username:
+ *           type: string
+ *           example: jeang
+ *
+ *     MessageResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *
+ *     ErrorResponse:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *         code:
+ *           type: string
+ */
 
+/**
+ * @swagger
+ * /auth/signup:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Create a new user account
+ *     description: Creates a Firebase Authentication user and stores profile information in Firestore.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SignupRequest'
+ *     responses:
+ *       201:
+ *         description: User successfully created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SignupSuccess'
+ *       400:
+ *         description: Missing fields or username already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             examples:
+ *               missingFields:
+ *                 value:
+ *                   error: Missing fields
+ *               usernameExists:
+ *                 value:
+ *                   error: Username already in use
+ *                   code: auth/username-already-exists
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.post("/signup", async (req, res) => {
 	try {
 		const { name, lastName, username, email, password } = req.body;
