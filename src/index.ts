@@ -2,12 +2,34 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import authRoutes from "./Routes/auth";
+import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
 const port = 3000;
+
+const allowedOrigins = ["https://proyecto-integrador-frontend-psi.vercel.app"];
+
+app.use(
+	cors({
+		origin(origin, callback) {
+			// Allow requests without an Origin header
+			// (e.g. Postman, curl, server-to-server requests)
+			if (!origin) {
+				return callback(null, true);
+			}
+
+			if (allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+
+			return callback(new Error("Not allowed by CORS"));
+		},
+		credentials: true,
+	}),
+);
 
 app.use(express.json());
 app.get("/", (req, res) => {
