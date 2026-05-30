@@ -1,18 +1,21 @@
 import admin from "firebase-admin";
+import { Auth } from "firebase-admin/auth";
+import { Firestore } from "firebase-admin/firestore";
 import serviceAccount from "../serviceAccount.json";
 
 const firebaseConfig = {
-	apiKey: process.env.apiKey,
+	apiKey: process.env.apiKey as string,
 	credential: admin.credential.cert(serviceAccount),
-	authDomain: process.env.authDomain,
-	projectId: process.env.projectId,
-	storageBucket: process.env.storageBucket,
-	messagingSengerId: process.env.messagingSenderId,
-	appId: process.env.appId,
-	measurementId: process.env.measurementId,
+	authDomain: process.env.authDomain as string,
+	projectId: process.env.projectId as string,
+	storageBucket: process.env.storageBucket as string,
+	appId: process.env.appId as string,
+	measurementId: process.env.measurementId as string,
 };
 
-admin.initializeApp(firebaseConfig);
+if (!admin.apps.length) {
+	admin.initializeApp(firebaseConfig);
+}
 
-export const auth = admin.auth();
-export const db = admin.firestore();
+export const auth: Auth = admin.auth();
+export const db: Firestore = admin.firestore();
