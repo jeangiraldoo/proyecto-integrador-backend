@@ -1,4 +1,9 @@
-router.post("/google", async (req, res) => {
+import { Router, Request, Response } from "express";
+import { auth, db } from "../firebase";
+
+const router = Router();
+
+router.post("/google", async (req: Request, res: Response): Promise<any> => {
 	const { idToken } = req.body;
 
 	try {
@@ -43,3 +48,5 @@ router.post("/google", async (req, res) => {
 		});
 	}
 });
+
+export default router;
