@@ -1,22 +1,22 @@
+import http from "http";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import authRoutes from "./Routes/auth";
 import cors from "cors";
 import dotenv from "dotenv";
+import { initSocket } from "./socket";
 
 dotenv.config();
 
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT ?? "3000";
 
 const allowedOrigins = ["https://proyecto-integrador-frontend-psi.vercel.app"];
 
 app.use(
 	cors({
 		origin(origin, callback) {
-			// Allow requests without an Origin header
-			// (e.g. Postman, curl, server-to-server requests)
 			if (!origin) {
 				return callback(null, true);
 			}
@@ -38,7 +38,7 @@ app.get("/", (req, res) => {
 app.use("/auth", authRoutes);
 
 const options = {
-	failOnErrors: true, // Whether or not to throw when parsing errors. Defaults to false.
+	failOnErrors: true,
 	definition: {
 		openapi: "3.0.0",
 		info: {
@@ -51,6 +51,9 @@ const options = {
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(options)));
 
-app.listen(port, () => {
-	console.log(`Example app listening on port ${port}`);
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
+	console.log(`Server listening on port ${PORT}`);
 });
