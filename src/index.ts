@@ -3,6 +3,7 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import authRoutes from "./Routes/auth";
+import roomRoutes from "./Routes/rooms";
 import cors from "cors";
 import dotenv from "dotenv";
 import { initSocket } from "./socket";
@@ -36,6 +37,7 @@ app.get("/", (req, res) => {
 	res.send("Welcome to the API! Go to /docs to know what routes there are and how to use them");
 });
 app.use("/auth", authRoutes);
+app.use("/rooms", roomRoutes);
 
 const options = {
 	failOnErrors: true,
