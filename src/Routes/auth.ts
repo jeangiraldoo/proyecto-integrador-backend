@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { auth, db } from "../firebase";
-import { deleteUserProfile } from "../models/user";
+import {
+	deleteUserProfile,
+	getUserProfile,
+	updateUserProfile,
+	PROFILE_NOT_FOUND_CODE,
+	USERNAME_TAKEN_CODE,
+} from "../models/user";
 
 const router = Router();
 /**
@@ -78,6 +84,19 @@ const router = Router();
  * Mirrors Firebase Auth's native `auth/requires-recent-login` window (~5 min).
  */
 const RECENT_LOGIN_MAX_AGE_SECONDS = 5 * 60;
+
+/** Valid username format: 3-20 chars, letters, digits or underscore. */
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
+
+/**
+ * Extracts the Firebase ID token from the `Authorization: Bearer <token>`
+ * header, falling back to `idToken` in the request body.
+ */
+function extractIdToken(req: { headers: Record<string, any>; body?: any }): string | undefined {
+	const authHeader = req.headers.authorization as string | undefined;
+	const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : undefined;
+	return bearer || req.body?.idToken;
+}
 
 /**
  * @swagger
@@ -317,6 +336,155 @@ router.delete("/account", async (req, res) => {
 			error: error.message || "Failed to delete the account",
 			code: error.code || "account/deletion-failed",
 		});
+	}
+});
+
+/**
+ * @openapi
+ * /auth/profile:
+ *   get:
+ *     summary: Get the authenticated user's profile.
+ *     description: >
+ *       Resolves the username from the uids/{uid} reverse-lookup and returns the
+ *       users/{username} document tied to the authenticated UID.
+ *     tags:
+ *       - auth
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       "200":
+ *         description: Profile found.
+ *       "400":
+ *         description: Missing ID token.
+ *       "401":
+ *         description: Invalid or expired token.
+ *       "404":
+ *         description: No profile exists for the authenticated user.
+ *       "500":
+ *         description: Unexpected error.
+ */
+router.get("/profile", async (req, res) => {
+	const idToken = extractIdToken(req);
+	if (!idToken) {
+		return res.status(400).json({ error: "Missing ID token", code: "auth/missing-id-token" });
+	}
+
+	let uid: string;
+	try {
+		uid = (await auth.verifyIdToken(idToken)).uid;
+	} catch (error: any) {
+		return res.status(401).json({
+			error: error.message || "Invalid or expired session token",
+			code: error.code || "auth/invalid-id-token",
+		});
+	}
+
+	try {
+		const profile = await getUserProfile(db, uid);
+		return res.status(200).json({ profile });
+	} catch (error: any) {
+		if (error.code === PROFILE_NOT_FOUND_CODE) {
+			return res.status(404).json({ error: error.message, code: error.code });
+		}
+		console.error(`[get-profile] Failed for uid=${uid}:`, error);
+		return res.status(500).json({ error: error.message, code: error.code });
+	}
+});
+
+/**
+ * @openapi
+ * /auth/profile:
+ *   patch:
+ *     summary: Update the authenticated user's profile.
+ *     description: >
+ *       Updates name, lastName, avatarUrl and/or username for the authenticated
+ *       user. The username is re-validated transactionally: if the new value
+ *       belongs to another account the write is rejected with
+ *       `auth/username-already-exists`. Reusing the current username is allowed.
+ *     tags:
+ *       - auth
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               username:
+ *                 type: string
+ *               avatarUrl:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       "200":
+ *         description: Profile updated.
+ *       "400":
+ *         description: Missing token, no fields, or invalid username format.
+ *       "401":
+ *         description: Invalid or expired token.
+ *       "404":
+ *         description: No profile exists for the authenticated user.
+ *       "409":
+ *         description: Username already in use by another account.
+ *       "500":
+ *         description: Unexpected error.
+ */
+router.patch("/profile", async (req, res) => {
+	const idToken = extractIdToken(req);
+	if (!idToken) {
+		return res.status(400).json({ error: "Missing ID token", code: "auth/missing-id-token" });
+	}
+
+	let uid: string;
+	try {
+		uid = (await auth.verifyIdToken(idToken)).uid;
+	} catch (error: any) {
+		return res.status(401).json({
+			error: error.message || "Invalid or expired session token",
+			code: error.code || "auth/invalid-id-token",
+		});
+	}
+
+	const { name, lastName, username, avatarUrl } = req.body ?? {};
+
+	if (
+		name === undefined &&
+		lastName === undefined &&
+		username === undefined &&
+		avatarUrl === undefined
+	) {
+		return res.status(400).json({ error: "No fields to update", code: "profile/no-updates" });
+	}
+
+	if (username !== undefined && !USERNAME_RE.test(username)) {
+		return res.status(400).json({
+			error: "Invalid username format (3-20 chars: letters, digits or underscore)",
+			code: "auth/invalid-username",
+		});
+	}
+
+	try {
+		const profile = await updateUserProfile(db, uid, { name, lastName, username, avatarUrl });
+		console.log(`[update-profile] Profile updated for uid=${uid} (username=${profile.username})`);
+		return res.status(200).json({ message: "Profile updated", profile });
+	} catch (error: any) {
+		if (error.code === USERNAME_TAKEN_CODE) {
+			console.warn(
+				`[update-profile] Username collision blocked for uid=${uid} ` + `(requested="${username}")`,
+			);
+			return res.status(409).json({ error: "Username already in use", code: USERNAME_TAKEN_CODE });
+		}
+		if (error.code === PROFILE_NOT_FOUND_CODE) {
+			return res.status(404).json({ error: error.message, code: error.code });
+		}
+		console.error(`[update-profile] Failed for uid=${uid}:`, error);
+		return res.status(500).json({ error: error.message, code: error.code });
 	}
 });
 

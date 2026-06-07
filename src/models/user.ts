@@ -126,3 +126,139 @@ export async function deleteUserProfile(
 
 	return { username, deletedPaths };
 }
+
+/** Error code returned when a username is already taken by another account. */
+export const USERNAME_TAKEN_CODE = "auth/username-already-exists";
+
+/** Error code returned when the authenticated user has no profile document. */
+export const PROFILE_NOT_FOUND_CODE = "profile/not-found";
+
+/**
+ * Fields a student is allowed to modify on their own profile (US-04).
+ * `undefined` means "leave unchanged"; only provided keys are updated.
+ *
+ * @interface ProfileUpdate
+ */
+export interface ProfileUpdate {
+	name?: string;
+	lastName?: string;
+	username?: string;
+	avatarUrl?: string | null;
+}
+
+/**
+ * Creates an Error carrying a `code` property so route handlers can map it to a
+ * specific HTTP response (mirrors the shape of Firebase Admin SDK errors).
+ */
+function codedError(message: string, code: string): Error {
+	return Object.assign(new Error(message), { code });
+}
+
+/**
+ * Reads the authenticated user's profile.
+ *
+ * Resolves the username from the `uids/{uid}` reverse-lookup and returns the
+ * `users/{username}` document. Reads strictly the document tied to the given UID.
+ *
+ * @async
+ * @function getUserProfile
+ * @param {FirebaseFirestore.Firestore} db - The Firestore (admin) database instance.
+ * @param {string} uid - The authenticated user's Firebase Auth UID.
+ * @returns {Promise<FirebaseFirestore.DocumentData>} The profile document (with `id`).
+ * @throws {Error} With code `profile/not-found` if no profile exists for the UID.
+ */
+export async function getUserProfile(
+	db: FirebaseFirestore.Firestore,
+	uid: string,
+): Promise<FirebaseFirestore.DocumentData> {
+	const uidSnap = await db.collection("uids").doc(uid).get();
+	const username = uidSnap.exists ? (uidSnap.data()?.username as string | undefined) : undefined;
+	if (!username) {
+		throw codedError("Profile not found for the authenticated user", PROFILE_NOT_FOUND_CODE);
+	}
+
+	const userSnap = await db.collection("users").doc(username).get();
+	if (!userSnap.exists) {
+		throw codedError("Profile not found for the authenticated user", PROFILE_NOT_FOUND_CODE);
+	}
+
+	return { id: userSnap.id, ...userSnap.data() };
+}
+
+/**
+ * Updates the authenticated user's profile with strict, transactional username
+ * re-validation.
+ *
+ * Profiles are keyed by username (`users/{username}`), so changing the username
+ * moves the document: a new doc is created, the old one deleted, and the
+ * `uids/{uid}` reverse-lookup repointed — all inside a single transaction to
+ * prevent races. If the requested username already belongs to a *different*
+ * account, the write is aborted with a `auth/username-already-exists` error.
+ * Reusing the user's own current username is always allowed (no self-collision).
+ *
+ * @async
+ * @function updateUserProfile
+ * @param {FirebaseFirestore.Firestore} db - The Firestore (admin) database instance.
+ * @param {string} uid - The authenticated user's Firebase Auth UID.
+ * @param {ProfileUpdate} updates - Fields to change (only provided keys are written).
+ * @returns {Promise<FirebaseFirestore.DocumentData>} The updated profile (with `id`).
+ * @throws {Error} `profile/not-found` if the user has no profile.
+ * @throws {Error} `auth/username-already-exists` if the username is taken by another user.
+ */
+export async function updateUserProfile(
+	db: FirebaseFirestore.Firestore,
+	uid: string,
+	updates: ProfileUpdate,
+): Promise<FirebaseFirestore.DocumentData> {
+	return db.runTransaction(async (tx) => {
+		// --- Reads first (Firestore requires all reads before any writes) ---
+		const uidRef = db.collection("uids").doc(uid);
+		const uidSnap = await tx.get(uidRef);
+		const currentUsername = uidSnap.exists
+			? (uidSnap.data()?.username as string | undefined)
+			: undefined;
+		if (!currentUsername) {
+			throw codedError("Profile not found for the authenticated user", PROFILE_NOT_FOUND_CODE);
+		}
+
+		const currentRef = db.collection("users").doc(currentUsername);
+		const currentSnap = await tx.get(currentRef);
+		if (!currentSnap.exists) {
+			throw codedError("Profile not found for the authenticated user", PROFILE_NOT_FOUND_CODE);
+		}
+		const current = currentSnap.data() ?? {};
+
+		const newUsername = updates.username ? updates.username.toLowerCase() : currentUsername;
+		const usernameChanging = newUsername !== currentUsername;
+
+		let targetRef = currentRef;
+		if (usernameChanging) {
+			targetRef = db.collection("users").doc(newUsername);
+			const targetSnap = await tx.get(targetRef);
+			// Collision only if the doc exists and belongs to ANOTHER uid.
+			if (targetSnap.exists && targetSnap.data()?.uid !== uid) {
+				throw codedError("Username already in use", USERNAME_TAKEN_CODE);
+			}
+		}
+
+		// --- Build the merged profile (only allowed mutable fields) ---
+		const merged: FirebaseFirestore.DocumentData = { ...current, uid, username: newUsername };
+		if (updates.name !== undefined) merged.name = updates.name;
+		if (updates.lastName !== undefined) merged.lastName = updates.lastName;
+		if (updates.avatarUrl !== undefined) merged.avatarUrl = updates.avatarUrl;
+		if (updates.name !== undefined || updates.lastName !== undefined) {
+			merged.displayName = `${merged.name ?? ""} ${merged.lastName ?? ""}`.trim();
+		}
+
+		// --- Writes ---
+		if (usernameChanging) {
+			tx.set(targetRef, merged);
+			tx.delete(currentRef);
+			tx.update(uidRef, { username: newUsername });
+		} else {
+			tx.set(currentRef, merged);
+		}
+
+		return { id: newUsername, ...merged };
+	});
+}
