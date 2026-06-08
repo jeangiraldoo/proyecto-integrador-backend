@@ -29,7 +29,12 @@ interface SocketData {
 }
 
 export function initSocket(httpServer: HttpServer): SocketServer {
-	const io = new SocketServer<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
+	const io = new SocketServer<
+		ClientToServerEvents,
+		ServerToClientEvents,
+		Record<string, never>,
+		SocketData
+	>(httpServer, {
 		cors: {
 			origin: CORS_ORIGIN,
 			methods: ["GET", "POST"],
@@ -68,17 +73,13 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 			if (!roomId || !text) return;
 
 			try {
-				const docRef = await db
-					.collection("rooms")
-					.doc(roomId)
-					.collection("messages")
-					.add({
-						room_id: roomId,
-						sender_id: socket.data.uid,
-						username: socket.data.username,
-						text,
-						timestamp: FieldValue.serverTimestamp(),
-					});
+				const docRef = await db.collection("rooms").doc(roomId).collection("messages").add({
+					room_id: roomId,
+					sender_id: socket.data.uid,
+					username: socket.data.username,
+					text,
+					timestamp: FieldValue.serverTimestamp(),
+				});
 
 				io.to(roomId).emit("new-message", {
 					id: docRef.id,

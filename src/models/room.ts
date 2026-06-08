@@ -37,5 +37,5 @@ export async function getRoomsByUser(
 	uid: string,
 ): Promise<Room[]> {
 	const snapshot = await db.collection("rooms").where("created_by", "==", uid).get();
-	return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Room));
+	return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Room);
 }
