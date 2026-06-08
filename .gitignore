@@ -38,6 +38,12 @@ serviceAccount.json
 tags
 **/tags
 
+# << Project-local only >>
+CLAUDE.md
+firestore.rules
+src/models/firestore.rules
+docs/HANDOFF.md
+
 # << OS >>
 # MAC
 **/.DS_Store
