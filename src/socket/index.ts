@@ -1,9 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
-import { FieldValue } from "firebase-admin/firestore";
 import { auth, db } from "../firebase";
-
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "http://localhost:5173";
 
 interface ServerToClientEvents {
 	"new-message": (message: {
@@ -28,7 +25,7 @@ interface SocketData {
 	username: string;
 }
 
-export function initSocket(httpServer: HttpServer): SocketServer {
+export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): SocketServer {
 	const io = new SocketServer<
 		ClientToServerEvents,
 		ServerToClientEvents,
@@ -36,7 +33,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 		SocketData
 	>(httpServer, {
 		cors: {
-			origin: CORS_ORIGIN,
+			origin: allowedOrigins,
 			methods: ["GET", "POST"],
 			credentials: true,
 		},
@@ -47,10 +44,11 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 		if (!token) return next(new Error("Missing auth token"));
 		try {
 			const decoded = await auth.verifyIdToken(token);
-			const userDoc = await db.collection("users").doc(decoded.uid).get();
-			if (!userDoc.exists) return next(new Error("User not found"));
+			// uids/{uid} is the reverse-lookup collection (uid → username)
+			const uidDoc = await db.collection("uids").doc(decoded.uid).get();
+			if (!uidDoc.exists) return next(new Error("User not found"));
 			socket.data.uid = decoded.uid;
-			socket.data.username = userDoc.data()?.username;
+			socket.data.username = uidDoc.data()?.username;
 			next();
 		} catch {
 			next(new Error("Invalid or expired token"));
@@ -72,13 +70,16 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 			const { roomId, text } = payload;
 			if (!roomId || !text) return;
 
+			// Use a single timestamp so the stored doc and the broadcast event match exactly
+			const timestamp = new Date();
+
 			try {
 				const docRef = await db.collection("rooms").doc(roomId).collection("messages").add({
 					room_id: roomId,
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
-					timestamp: FieldValue.serverTimestamp(),
+					timestamp,
 				});
 
 				io.to(roomId).emit("new-message", {
@@ -87,7 +88,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
-					timestamp: new Date().toISOString(),
+					timestamp: timestamp.toISOString(),
 				});
 			} catch (error) {
 				console.error("Error saving message:", error);

@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ?? "3000";
 
-const allowedOrigins = [
+export const allowedOrigins = [
 	"https://proyecto-integrador-frontend-psi.vercel.app",
 	"http://localhost:5173",
 ];
@@ -66,7 +66,7 @@ const options = {
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(options)));
 
 const httpServer = http.createServer(app);
-initSocket(httpServer);
+initSocket(httpServer, allowedOrigins);
 
 httpServer.listen(PORT, () => {
 	console.log(`Server listening on port ${PORT}`);
