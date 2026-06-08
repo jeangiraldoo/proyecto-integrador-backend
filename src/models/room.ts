@@ -36,6 +36,11 @@ export async function getRoomsByUser(
 	db: FirebaseFirestore.Firestore,
 	uid: string,
 ): Promise<Room[]> {
-	const snapshot = await db.collection("rooms").where("created_by", "==", uid).get();
+	// Composite index on (created_by, created_at) required in Firestore Console
+	const snapshot = await db
+		.collection("rooms")
+		.where("created_by", "==", uid)
+		.orderBy("created_at", "desc")
+		.get();
 	return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Room);
 }

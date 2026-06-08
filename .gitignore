@@ -40,9 +40,8 @@ tags
 
 # << Project-local only >>
 CLAUDE.md
-firestore.rules
-src/models/firestore.rules
 docs/HANDOFF.md
+src/models/firestore.rules
 
 # << OS >>
 # MAC
