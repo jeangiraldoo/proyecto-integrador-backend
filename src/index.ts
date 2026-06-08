@@ -13,7 +13,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ?? "3000";
 
-const allowedOrigins = ["https://proyecto-integrador-frontend-psi.vercel.app"];
+const allowedOrigins = [
+	"https://proyecto-integrador-frontend-psi.vercel.app",
+	"http://localhost:5173",
+];
 
 app.use(
 	cors({
@@ -46,6 +49,15 @@ const options = {
 		info: {
 			title: "Backend API",
 			version: "0.1.0",
+		},
+		components: {
+			securitySchemes: {
+				bearerAuth: {
+					type: "http",
+					scheme: "bearer",
+					bearerFormat: "JWT",
+				},
+			},
 		},
 	},
 	apis: ["./src/Routes/*.ts"],
