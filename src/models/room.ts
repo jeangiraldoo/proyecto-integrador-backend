@@ -44,3 +44,54 @@ export async function getRoomsByUser(
 		.get();
 	return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Room);
 }
+
+/**
+ * A chat message as returned to clients: the Firestore Timestamp is serialized
+ * to an ISO-8601 string so it travels cleanly over JSON.
+ */
+export interface ChatHistoryMessage {
+	id: string;
+	room_id: string;
+	sender_id: string;
+	username: string;
+	text: string;
+	timestamp: string | null;
+}
+
+/**
+ * Retrieves the full chat history of a room, ordered chronologically ascending
+ * (oldest → newest) by the server `timestamp`, ready to render in the UI (US-11).
+ *
+ * Reads strictly the `messages` subcollection of the given room, so messages
+ * from other rooms are never included.
+ *
+ * @async
+ * @function getRoomMessages
+ * @param {FirebaseFirestore.Firestore} db - The Firestore (admin) database instance.
+ * @param {string} roomId - The room whose history is requested.
+ * @returns {Promise<ChatHistoryMessage[]>} Messages in ascending chronological order.
+ */
+export async function getRoomMessages(
+	db: FirebaseFirestore.Firestore,
+	roomId: string,
+): Promise<ChatHistoryMessage[]> {
+	const snapshot = await db
+		.collection("rooms")
+		.doc(roomId)
+		.collection("messages")
+		.orderBy("timestamp", "asc")
+		.get();
+
+	return snapshot.docs.map((doc) => {
+		const data = doc.data();
+		const ts = data.timestamp as FirebaseFirestore.Timestamp | undefined;
+		return {
+			id: doc.id,
+			room_id: (data.room_id as string | undefined) ?? roomId,
+			sender_id: (data.sender_id as string | undefined) ?? "",
+			username: (data.username as string | undefined) ?? "",
+			text: (data.text as string | undefined) ?? "",
+			timestamp: ts?.toDate ? ts.toDate().toISOString() : null,
+		};
+	});
+}
