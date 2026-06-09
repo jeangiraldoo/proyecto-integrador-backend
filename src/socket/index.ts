@@ -2,28 +2,37 @@ import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
 import { auth, db } from "../firebase";
 
+/**
+ * Shape of a chat message broadcast to clients in a room.
+ * Field names use snake_case to match the Firestore `messages` model.
+ */
+interface ChatMessage {
+	id: string;
+	room_id: string;
+	sender_id: string;
+	username: string;
+	text: string;
+	timestamp: string;
+}
+
 interface ServerToClientEvents {
-	"new-message": (message: {
-		id: string;
-		room_id: string;
-		sender_id: string;
-		username: string;
-		text: string;
-		timestamp: string;
-	}) => void;
+	receive_message: (message: ChatMessage) => void;
 	error: (payload: { message: string }) => void;
 }
 
 interface ClientToServerEvents {
-	"join-room": (roomId: string) => void;
-	"leave-room": (roomId: string) => void;
-	"send-message": (payload: { roomId: string; text: string }) => void;
+	join_room: (roomId: string) => void;
+	leave_room: (roomId: string) => void;
+	send_message: (payload: { room_id: string; text: string }) => void;
 }
 
 interface SocketData {
 	uid: string;
 	username: string;
 }
+
+/** Maximum length accepted for a single chat message. */
+const MAX_MESSAGE_LENGTH = 2000;
 
 export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): SocketServer {
 	const io = new SocketServer<
@@ -39,6 +48,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		},
 	});
 
+	// Handshake auth: every socket must present a valid Firebase ID token.
 	io.use(async (socket, next) => {
 		const token = socket.handshake.auth?.token as string | undefined;
 		if (!token) return next(new Error("Missing auth token"));
@@ -56,48 +66,81 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 	});
 
 	io.on("connection", (socket) => {
-		console.log(`Client connected: ${socket.id} (uid: ${socket.data.uid})`);
+		console.log(`[socket] connected ${socket.id} (uid=${socket.data.uid})`);
 
-		socket.on("join-room", (roomId: string) => {
+		// --- join_room: subscribe this socket to a room channel ---
+		socket.on("join_room", (roomId) => {
+			if (typeof roomId !== "string" || !roomId.trim()) {
+				socket.emit("error", { message: "join_room requires a valid roomId" });
+				return;
+			}
 			socket.join(roomId);
+			console.log(`[socket] ${socket.data.username} (${socket.id}) joined room ${roomId}`);
 		});
 
-		socket.on("leave-room", (roomId: string) => {
-			socket.leave(roomId);
+		// --- leave_room: unsubscribe this socket from a room channel ---
+		socket.on("leave_room", (roomId) => {
+			if (typeof roomId === "string" && roomId.trim()) {
+				socket.leave(roomId);
+				console.log(`[socket] ${socket.data.username} (${socket.id}) left room ${roomId}`);
+			}
 		});
 
-		socket.on("send-message", async (payload: { roomId: string; text: string }) => {
-			const { roomId, text } = payload;
-			if (!roomId || !text) return;
+		// --- send_message: validate, persist, and broadcast to the room only ---
+		socket.on("send_message", async (payload) => {
+			const roomId = typeof payload?.room_id === "string" ? payload.room_id.trim() : "";
+			const text = typeof payload?.text === "string" ? payload.text.trim() : "";
 
-			// Use a single timestamp so the stored doc and the broadcast event match exactly
+			// Validate the payload before touching Firestore or broadcasting.
+			if (!roomId || !text) {
+				console.warn(
+					`[socket] rejected send_message from uid=${socket.data.uid}: missing room_id or text`,
+				);
+				socket.emit("error", { message: "Message must include room_id and non-empty text" });
+				return;
+			}
+			if (text.length > MAX_MESSAGE_LENGTH) {
+				socket.emit("error", { message: "Message is too long" });
+				return;
+			}
+
+			// Identity and time are server-authoritative — never trusted from the client.
 			const timestamp = new Date();
-
 			try {
-				const docRef = await db.collection("rooms").doc(roomId).collection("messages").add({
-					room_id: roomId,
-					sender_id: socket.data.uid,
-					username: socket.data.username,
-					text,
-					timestamp,
-				});
+				const docRef = await db
+					.collection("rooms")
+					.doc(roomId)
+					.collection("messages")
+					.add({
+						room_id: roomId,
+						sender_id: socket.data.uid,
+						username: socket.data.username,
+						text,
+						timestamp,
+					});
 
-				io.to(roomId).emit("new-message", {
+				const message: ChatMessage = {
 					id: docRef.id,
 					room_id: roomId,
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
 					timestamp: timestamp.toISOString(),
-				});
+				};
+
+				// Strict room isolation: only sockets joined to roomId receive this.
+				io.to(roomId).emit("receive_message", message);
+				console.log(
+					`[socket] receive_message -> room ${roomId} (id=${docRef.id}, from=${socket.data.username})`,
+				);
 			} catch (error) {
-				console.error("Error saving message:", error);
-				socket.emit("error", { message: "Failed to save message" });
+				console.error(`[socket] failed to persist message in room ${roomId}:`, error);
+				socket.emit("error", { message: "Failed to send message" });
 			}
 		});
 
 		socket.on("disconnect", () => {
-			console.log(`Client disconnected: ${socket.id}`);
+			console.log(`[socket] disconnected ${socket.id}`);
 		});
 	});
 
