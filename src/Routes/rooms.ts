@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { auth, db } from "../firebase";
-import { createRoom, getRoomsByUser } from "../models/room";
+import { createRoom, getRoomsByUser, getRoomMessages } from "../models/room";
 
 const router = Router();
 
@@ -125,6 +125,67 @@ router.get("/", async (req, res) => {
 	try {
 		const rooms = await getRoomsByUser(db, uid);
 		return res.json(rooms);
+	} catch (error: any) {
+		return res.status(500).json({ error: error.message });
+	}
+});
+
+/**
+ * @swagger
+ * /rooms/{roomId}/messages:
+ *   get:
+ *     tags:
+ *       - Rooms
+ *     summary: Get the chat history of a room
+ *     description: >
+ *       Returns the room's messages ordered chronologically ascending
+ *       (oldest first) by the server timestamp, ready to render in the chat panel.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the room whose history is requested.
+ *     responses:
+ *       200:
+ *         description: Chat history (ascending by timestamp)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   room_id:
+ *                     type: string
+ *                   sender_id:
+ *                     type: string
+ *                   username:
+ *                     type: string
+ *                   text:
+ *                     type: string
+ *                   timestamp:
+ *                     type: string
+ *                     format: date-time
+ *                     nullable: true
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/:roomId/messages", async (req, res) => {
+	const uid = await requireAuth(req, res);
+	if (!uid) return;
+
+	const { roomId } = req.params;
+	try {
+		const messages = await getRoomMessages(db, roomId);
+		return res.json(messages);
 	} catch (error: any) {
 		return res.status(500).json({ error: error.message });
 	}

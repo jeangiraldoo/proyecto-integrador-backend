@@ -1,5 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
+import { FieldValue } from "firebase-admin/firestore";
 import { auth, db } from "../firebase";
 
 /**
@@ -104,20 +105,17 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				return;
 			}
 
-			// Identity and time are server-authoritative — never trusted from the client.
-			const timestamp = new Date();
+			// Identity is server-authoritative — never trusted from the client.
 			try {
-				const docRef = await db
-					.collection("rooms")
-					.doc(roomId)
-					.collection("messages")
-					.add({
-						room_id: roomId,
-						sender_id: socket.data.uid,
-						username: socket.data.username,
-						text,
-						timestamp,
-					});
+				const docRef = await db.collection("rooms").doc(roomId).collection("messages").add({
+					room_id: roomId,
+					sender_id: socket.data.uid,
+					username: socket.data.username,
+					text,
+					// Firebase SERVER timestamp (BE-15): authoritative time that keeps the
+					// chat history in a consistent chronological order across time zones.
+					timestamp: FieldValue.serverTimestamp(),
+				});
 
 				const message: ChatMessage = {
 					id: docRef.id,
@@ -125,7 +123,9 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
-					timestamp: timestamp.toISOString(),
+					// Live broadcast uses the send time for instant display; the persisted
+					// serverTimestamp above is the source of truth for history ordering.
+					timestamp: new Date().toISOString(),
 				};
 
 				// Strict room isolation: only sockets joined to roomId receive this.
