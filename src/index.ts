@@ -16,6 +16,9 @@ const PORT = process.env.PORT ?? "3000";
 export const allowedOrigins = [
 	"https://proyecto-integrador-frontend-psi.vercel.app",
 	"http://localhost:5173",
+	// Swagger UI is served from the API itself, so its requests carry this origin.
+	"http://localhost:3000",
+	"http://127.0.0.1:3000",
 ];
 
 app.use(
