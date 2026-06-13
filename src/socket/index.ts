@@ -2,6 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
 import { FieldValue } from "firebase-admin/firestore";
 import { auth, db } from "../firebase";
+import { getRoomById, RoomNotFoundError } from "../models/room";
 
 /**
  * Shape of a chat message broadcast to clients in a room.
@@ -19,6 +20,7 @@ interface ChatMessage {
 interface ServerToClientEvents {
 	receive_message: (message: ChatMessage) => void;
 	error: (payload: { message: string }) => void;
+	room_joined: (payload: { roomId: string; isAdmin: boolean }) => void;
 }
 
 interface ClientToServerEvents {
@@ -69,14 +71,27 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 	io.on("connection", (socket) => {
 		console.log(`[socket] connected ${socket.id} (uid=${socket.data.uid})`);
 
-		// --- join_room: subscribe this socket to a room channel ---
-		socket.on("join_room", (roomId) => {
+		// --- join_room: validate room exists, subscribe socket, and emit role flag ---
+		socket.on("join_room", async (roomId) => {
 			if (typeof roomId !== "string" || !roomId.trim()) {
 				socket.emit("error", { message: "join_room requires a valid roomId" });
 				return;
 			}
-			socket.join(roomId);
-			console.log(`[socket] ${socket.data.username} (${socket.id}) joined room ${roomId}`);
+			try {
+				const { isAdmin } = await getRoomById(db, roomId, socket.data.uid);
+				socket.join(roomId);
+				socket.emit("room_joined", { roomId, isAdmin });
+				console.log(
+					`[socket] ${socket.data.username} joined room ${roomId} (isAdmin=${isAdmin})`,
+				);
+			} catch (error) {
+				if (error instanceof RoomNotFoundError) {
+					socket.emit("error", { message: error.message });
+				} else {
+					console.error(`[socket] failed to validate room ${roomId}:`, error);
+					socket.emit("error", { message: "Failed to join room" });
+				}
+			}
 		});
 
 		// --- leave_room: unsubscribe this socket from a room channel ---
