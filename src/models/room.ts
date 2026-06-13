@@ -8,6 +8,24 @@ export interface Room {
 	created_at: FirebaseFirestore.Timestamp;
 }
 
+export class RoomNotFoundError extends Error {
+	constructor(roomId: string) {
+		super(`Room '${roomId}' not found`);
+		this.name = "RoomNotFoundError";
+	}
+}
+
+export async function getRoomById(
+	db: FirebaseFirestore.Firestore,
+	roomId: string,
+	uid: string,
+): Promise<{ room: Room; isAdmin: boolean }> {
+	const doc = await db.collection("rooms").doc(roomId).get();
+	if (!doc.exists) throw new RoomNotFoundError(roomId);
+	const room = { id: doc.id, ...doc.data() } as Room;
+	return { room, isAdmin: room.created_by === uid };
+}
+
 // Messages live as a subcollection: /rooms/{roomId}/messages/{messageId}
 export interface Message {
 	id: string;
