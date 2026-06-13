@@ -15,6 +15,13 @@ export class RoomNotFoundError extends Error {
 	}
 }
 
+export class ForbiddenError extends Error {
+	constructor(action: string) {
+		super(`Forbidden: only the room creator can ${action}`);
+		this.name = "ForbiddenError";
+	}
+}
+
 export async function getRoomById(
 	db: FirebaseFirestore.Firestore,
 	roomId: string,
@@ -85,6 +92,44 @@ export async function getRoomsByUser(
 		.orderBy("created_at", "desc")
 		.get();
 	return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Room);
+}
+
+const DELETE_BATCH_SIZE = 500;
+
+export async function updateRoomName(
+	db: FirebaseFirestore.Firestore,
+	roomId: string,
+	uid: string,
+	newName: string,
+): Promise<void> {
+	const docRef = db.collection("rooms").doc(roomId);
+	const snap = await docRef.get();
+	if (!snap.exists) throw new RoomNotFoundError(roomId);
+	if (snap.data()?.created_by !== uid) throw new ForbiddenError("rename this room");
+	await docRef.update({ name: newName });
+}
+
+export async function deleteRoom(
+	db: FirebaseFirestore.Firestore,
+	roomId: string,
+	uid: string,
+): Promise<void> {
+	const docRef = db.collection("rooms").doc(roomId);
+	const snap = await docRef.get();
+	if (!snap.exists) throw new RoomNotFoundError(roomId);
+	if (snap.data()?.created_by !== uid) throw new ForbiddenError("delete this room");
+
+	// Delete messages subcollection in batches to avoid orphaned reads.
+	const messagesRef = docRef.collection("messages");
+	let chunk = await messagesRef.limit(DELETE_BATCH_SIZE).get();
+	while (!chunk.empty) {
+		const batch = db.batch();
+		chunk.docs.forEach((d) => batch.delete(d.ref));
+		await batch.commit();
+		chunk = await messagesRef.limit(DELETE_BATCH_SIZE).get();
+	}
+
+	await docRef.delete();
 }
 
 /**
