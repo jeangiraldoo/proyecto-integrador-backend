@@ -36,18 +36,42 @@ export interface Message {
 	timestamp: FirebaseFirestore.Timestamp;
 }
 
+const ROOM_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const ROOM_CODE_DIGITS = "0123456789";
+
+function generateRoomCode(): string {
+	const letters = Array.from(
+		{ length: 3 },
+		() => ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)],
+	).join("");
+	const digits = Array.from(
+		{ length: 4 },
+		() => ROOM_CODE_DIGITS[Math.floor(Math.random() * ROOM_CODE_DIGITS.length)],
+	).join("");
+	return `${letters}-${digits}`;
+}
+
 export async function createRoom(
 	db: FirebaseFirestore.Firestore,
 	uid: string,
 	name: string,
 ): Promise<{ id: string; name: string; created_by: string; members: string[] }> {
-	const docRef = await db.collection("rooms").add({
-		name,
-		created_by: uid,
-		members: [],
-		created_at: FieldValue.serverTimestamp(),
-	});
-	return { id: docRef.id, name, created_by: uid, members: [] };
+	const MAX_ATTEMPTS = 5;
+	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		const code = generateRoomCode();
+		const docRef = db.collection("rooms").doc(code);
+		const existing = await docRef.get();
+		if (!existing.exists) {
+			await docRef.set({
+				name,
+				created_by: uid,
+				members: [],
+				created_at: FieldValue.serverTimestamp(),
+			});
+			return { id: code, name, created_by: uid, members: [] };
+		}
+	}
+	throw new Error("Failed to generate a unique room code after maximum attempts");
 }
 
 export async function getRoomsByUser(
