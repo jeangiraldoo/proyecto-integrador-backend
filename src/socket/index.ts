@@ -18,14 +18,46 @@ interface ChatMessage {
 }
 
 interface ServerToClientEvents {
-	receive_message: (message: ChatMessage) => void;
-	error: (payload: { message: string }) => void;
+	/**
+	 * Emitted after a successful `join_room`.
+	 * @param payload.roomId  The room the socket joined.
+	 * @param payload.isAdmin `true` if the connected user is the room creator (host).
+	 */
 	room_joined: (payload: { roomId: string; isAdmin: boolean }) => void;
+
+	/**
+	 * Delivers a new chat message to every socket currently in the room.
+	 * @param message Full message object including server-assigned `id` and ISO timestamp.
+	 */
+	receive_message: (message: ChatMessage) => void;
+
+	/**
+	 * Sent to the originating socket when any operation fails.
+	 * @param payload.message Human-readable description of the error.
+	 */
+	error: (payload: { message: string }) => void;
 }
 
 interface ClientToServerEvents {
+	/**
+	 * Subscribe this socket to a room channel.
+	 * Validates room existence in Firestore and emits `room_joined` on success.
+	 * @param roomId Firestore document ID of the target room (e.g. "ABC-1234").
+	 */
 	join_room: (roomId: string) => void;
+
+	/**
+	 * Unsubscribe this socket from a room channel.
+	 * @param roomId Firestore document ID of the room to leave.
+	 */
 	leave_room: (roomId: string) => void;
+
+	/**
+	 * Send a chat message to a room.
+	 * The server persists the message in Firestore and broadcasts it via `receive_message`.
+	 * @param payload.room_id Target room ID.
+	 * @param payload.text    Message text (max 2 000 characters).
+	 */
 	send_message: (payload: { room_id: string; text: string }) => void;
 }
 
@@ -36,6 +68,12 @@ interface SocketData {
 
 /** Maximum length accepted for a single chat message. */
 const MAX_MESSAGE_LENGTH = 2000;
+
+/**
+ * In-memory set of UIDs that currently have an active socket connection.
+ * Prevents the same user from opening a second concurrent socket.
+ */
+const connectedUids = new Set<string>();
 
 export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): SocketServer {
 	const io = new SocketServer<
@@ -57,6 +95,9 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		if (!token) return next(new Error("Missing auth token"));
 		try {
 			const decoded = await auth.verifyIdToken(token);
+			if (connectedUids.has(decoded.uid)) {
+				return next(new Error("User already connected"));
+			}
 			// uids/{uid} is the reverse-lookup collection (uid → username)
 			const uidDoc = await db.collection("uids").doc(decoded.uid).get();
 			if (!uidDoc.exists) return next(new Error("User not found"));
@@ -69,6 +110,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 	});
 
 	io.on("connection", (socket) => {
+		connectedUids.add(socket.data.uid);
 		console.log(`[socket] connected ${socket.id} (uid=${socket.data.uid})`);
 
 		// --- join_room: validate room exists, subscribe socket, and emit role flag ---
@@ -107,7 +149,6 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			const roomId = typeof payload?.room_id === "string" ? payload.room_id.trim() : "";
 			const text = typeof payload?.text === "string" ? payload.text.trim() : "";
 
-			// Validate the payload before touching Firestore or broadcasting.
 			if (!roomId || !text) {
 				console.warn(
 					`[socket] rejected send_message from uid=${socket.data.uid}: missing room_id or text`,
@@ -127,8 +168,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
-					// Firebase SERVER timestamp (BE-15): authoritative time that keeps the
-					// chat history in a consistent chronological order across time zones.
+					// Firebase SERVER timestamp: authoritative time for consistent history ordering.
 					timestamp: FieldValue.serverTimestamp(),
 				});
 
@@ -138,8 +178,8 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					sender_id: socket.data.uid,
 					username: socket.data.username,
 					text,
-					// Live broadcast uses the send time for instant display; the persisted
-					// serverTimestamp above is the source of truth for history ordering.
+					// Live broadcast uses client time for instant display; serverTimestamp is source of
+					// truth for history ordering.
 					timestamp: new Date().toISOString(),
 				};
 
@@ -155,7 +195,8 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		});
 
 		socket.on("disconnect", () => {
-			console.log(`[socket] disconnected ${socket.id}`);
+			connectedUids.delete(socket.data.uid);
+			console.log(`[socket] disconnected ${socket.id} (uid=${socket.data.uid})`);
 		});
 	});
 
