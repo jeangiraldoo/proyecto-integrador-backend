@@ -20,6 +20,7 @@ interface ChatMessage {
 interface Participant {
 	uid: string;
 	username: string;
+	avatarUrl: string | null;
 }
 
 interface ServerToClientEvents {
@@ -34,19 +35,21 @@ interface ServerToClientEvents {
 
 	/**
 	 * Broadcast to all other sockets in a room when a new participant joins.
-	 * @param payload.roomId   The room that was joined.
-	 * @param payload.uid      UID of the user who joined.
-	 * @param payload.username Display name of the user who joined.
+	 * @param payload.roomId    The room that was joined.
+	 * @param payload.uid       UID of the user who joined.
+	 * @param payload.username  Display name of the user who joined.
+	 * @param payload.avatarUrl Profile picture URL, or null if the user has no avatar.
 	 */
-	participant_joined: (payload: { roomId: string; uid: string; username: string }) => void;
+	participant_joined: (payload: { roomId: string; uid: string; username: string; avatarUrl: string | null }) => void;
 
 	/**
 	 * Broadcast to all remaining sockets in a room when a participant leaves or disconnects.
-	 * @param payload.roomId   The room that was left.
-	 * @param payload.uid      UID of the user who left.
-	 * @param payload.username Display name of the user who left.
+	 * @param payload.roomId    The room that was left.
+	 * @param payload.uid       UID of the user who left.
+	 * @param payload.username  Display name of the user who left.
+	 * @param payload.avatarUrl Profile picture URL, or null if the user has no avatar.
 	 */
-	participant_left: (payload: { roomId: string; uid: string; username: string }) => void;
+	participant_left: (payload: { roomId: string; uid: string; username: string; avatarUrl: string | null }) => void;
 
 	/**
 	 * Delivers a new chat message to every socket currently in the room.
@@ -149,6 +152,7 @@ interface ClientToServerEvents {
 interface SocketData {
 	uid: string;
 	username: string;
+	avatarUrl: string | null;
 }
 
 /** Maximum length accepted for a single chat message. */
@@ -169,7 +173,7 @@ function getRoomParticipants(io: SocketServer, roomId: string): Participant[] {
 	const participants: Participant[] = [];
 	for (const socketId of socketIds) {
 		const s = io.sockets.sockets.get(socketId);
-		if (s?.data.uid) participants.push({ uid: s.data.uid, username: s.data.username });
+		if (s?.data.uid) participants.push({ uid: s.data.uid, username: s.data.username, avatarUrl: s.data.avatarUrl });
 	}
 	return participants;
 }
@@ -200,8 +204,11 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			// uids/{uid} is the reverse-lookup collection (uid → username)
 			const uidDoc = await db.collection("uids").doc(decoded.uid).get();
 			if (!uidDoc.exists) return next(new Error("User not found"));
+			const username = uidDoc.data()?.username as string;
+			const userDoc = await db.collection("users").doc(username).get();
 			socket.data.uid = decoded.uid;
-			socket.data.username = uidDoc.data()?.username;
+			socket.data.username = username;
+			socket.data.avatarUrl = (userDoc.data()?.avatarUrl as string | undefined) ?? null;
 			next();
 		} catch {
 			next(new Error("Invalid or expired token"));
@@ -231,6 +238,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					roomId,
 					uid: socket.data.uid,
 					username: socket.data.username,
+					avatarUrl: socket.data.avatarUrl,
 				});
 				console.log(
 					`[socket] ${socket.data.username} joined room ${roomId} (isAdmin=${isAdmin})`,
@@ -253,6 +261,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					roomId,
 					uid: socket.data.uid,
 					username: socket.data.username,
+					avatarUrl: socket.data.avatarUrl,
 				});
 				console.log(`[socket] ${socket.data.username} (${socket.id}) left room ${roomId}`);
 			}
@@ -360,6 +369,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					roomId,
 					uid: socket.data.uid,
 					username: socket.data.username,
+					avatarUrl: socket.data.avatarUrl,
 				});
 			}
 		});
