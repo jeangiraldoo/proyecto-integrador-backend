@@ -88,6 +88,19 @@ const RECENT_LOGIN_MAX_AGE_SECONDS = 5 * 60;
 /** Valid username format: 3-20 chars, letters, digits or underscore. */
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
+/** Password rules: min 8 chars, at least one uppercase, one lowercase, one special character. */
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{8,}$/;
+
+function validatePassword(password: string): string | null {
+	if (password.length < PASSWORD_MIN_LENGTH)
+		return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+	if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+	if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+	if (!/[^a-zA-Z0-9]/.test(password)) return "Password must contain at least one special character";
+	return null;
+}
+
 /**
  * Extracts the Firebase ID token from the `Authorization: Bearer <token>`
  * header, falling back to `idToken` in the request body.
@@ -145,9 +158,12 @@ router.post("/signup", async (req, res) => {
 		const { name, lastName, username, email, password } = req.body;
 
 		if (!(name && lastName && username && email && password)) {
-			return res.status(400).json({
-				error: "Missing fields",
-			});
+			return res.status(400).json({ error: "Missing fields" });
+		}
+
+		const passwordError = validatePassword(password);
+		if (passwordError) {
+			return res.status(400).json({ error: passwordError, code: "auth/weak-password" });
 		}
 
 		// Profiles are keyed by lowercase username (users/{username}); the frontend
@@ -198,32 +214,59 @@ router.post("/signup", async (req, res) => {
 });
 
 router.post("/complete-profile", async (req, res) => {
-	const { idToken, username } = req.body;
+	const { idToken, username, name, lastName, avatarUrl } = req.body;
+
+	if (!idToken || !username) {
+		return res.status(400).json({ error: "Missing fields: idToken and username are required" });
+	}
+
+	if (!USERNAME_RE.test(username)) {
+		return res.status(400).json({
+			error: "Invalid username format (3-20 chars: letters, digits or underscore)",
+			code: "auth/invalid-username",
+		});
+	}
 
 	try {
 		const decoded = await auth.verifyIdToken(idToken);
 		const uid = decoded.uid;
+		const lowerUsername = username.toLowerCase();
 
-		const existing = await db.collection("users").where("username", "==", username).limit(1).get();
-
-		if (!existing.empty) {
+		const existing = await db.collection("users").doc(lowerUsername).get();
+		if (existing.exists && existing.data()?.uid !== uid) {
 			return res.status(400).json({
 				error: "USERNAME_ALREADY_EXISTS",
 				code: "auth/username-already-exists",
 			});
 		}
 
-		await db.collection("users").doc(uid).set(
-			{
-				username,
-				profileComplete: true,
-			},
-			{ merge: true },
-		);
+		// Google token carries the display name; use it as fallback when the
+		// client does not send name/lastName explicitly.
+		const resolvedName = (name as string | undefined)?.trim() || (decoded.name ?? "").split(" ")[0] || "";
+		const resolvedLastName = (lastName as string | undefined)?.trim() || (decoded.name ?? "").split(" ").slice(1).join(" ") || "";
 
-		return res.json({
-			message: "Profile completed",
-		});
+		const profileData = {
+			uid,
+			email: decoded.email ?? null,
+			username: lowerUsername,
+			name: resolvedName,
+			lastName: resolvedLastName,
+			displayName: `${resolvedName} ${resolvedLastName}`.trim() || decoded.name || lowerUsername,
+			avatarUrl: (avatarUrl as string | undefined) ?? decoded.picture ?? null,
+			provider: "google",
+			profileComplete: true,
+			createdAt: new Date(),
+		};
+
+		// Atomically: write users/{username}, create uids/{uid} lookup, remove
+		// the temporary users/{uid} stub created by POST /auth/google.
+		const batch = db.batch();
+		batch.set(db.collection("users").doc(lowerUsername), profileData);
+		batch.set(db.collection("uids").doc(uid), { username: lowerUsername });
+		batch.delete(db.collection("users").doc(uid));
+		await batch.commit();
+
+		return res.json({ message: "Profile completed", username: lowerUsername });
 	} catch (error: any) {
 		return res.status(401).json({
 			error: error.code || error.message,
