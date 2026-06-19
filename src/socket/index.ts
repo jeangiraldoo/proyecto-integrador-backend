@@ -140,7 +140,7 @@ interface ClientToServerEvents {
 	 * @param payload.targetUid UID of the peer.
 	 * @param payload.candidate RTCIceCandidateInit.
 	 */
-	ice_candidate: (payload: { targetUid: string; candidate: RTCIceCandidateInit }) => void;
+	webrtc_ice_candidate: (payload: { targetUid: string; candidate: RTCIceCandidateInit }) => void;
 
 	/**
 	 * Hang up the current call. Broadcasts `call_ended` to every socket in the room.
@@ -344,8 +344,8 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			console.log(`[socket] webrtc_answer relayed ${socket.data.uid} → ${targetUid}`);
 		});
 
-		// --- ice_candidate: relay ICE candidate to the target peer ---
-		socket.on("ice_candidate", ({ targetUid, candidate }) => {
+		// --- webrtc_ice_candidate: relay ICE candidate to the target peer ---
+		socket.on("webrtc_ice_candidate", ({ targetUid, candidate }) => {
 			const targetSocketId = uidToSocketId.get(targetUid);
 			if (!targetSocketId) return;
 			io.to(targetSocketId).emit("incoming_ice_candidate", {
