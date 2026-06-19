@@ -84,10 +84,11 @@ Al recibir `room_joined`, iterar `participants` y mostrar el `avatarUrl` de cada
 la lista de avatares visibles al recibir `participant_joined` (agregar) y `participant_left`
 (quitar).
 
-### Permitir cambiar el avatar (opcional)
+### Cambiar el avatar desde el dashboard
 
-El usuario puede cambiar su foto apuntando a cualquier URL pública (imagen de perfil de otra
-red, Gravatar, etc.) mediante:
+El endpoint para editar la foto de perfil ya existe: `PATCH /auth/profile`. Desde el dashboard,
+mostrar un input de texto o modal donde el usuario pegue una URL pública (foto de otra red,
+Gravatar, etc.) y enviarla así:
 
 ```
 PATCH /auth/profile
@@ -96,9 +97,9 @@ Authorization: Bearer <idToken>
 { "avatarUrl": "https://example.com/mi-foto.jpg" }
 ```
 
-No hay endpoint de subida de archivos — el usuario provee una URL. Si el equipo quiere subida
-de archivos en el futuro, se necesitaría Firebase Storage o un CDN externo; eso está fuera del
-alcance actual.
+La respuesta devuelve el perfil actualizado con el nuevo `avatarUrl`. No hay endpoint de subida
+de archivos — el usuario provee una URL directamente. Si en el futuro se quiere subida de
+archivos, requeriría Firebase Storage o un CDN externo (fuera del alcance actual).
 
 ## Notas para la implementación
 
