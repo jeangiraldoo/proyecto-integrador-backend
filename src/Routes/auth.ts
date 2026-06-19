@@ -88,6 +88,22 @@ const RECENT_LOGIN_MAX_AGE_SECONDS = 5 * 60;
 /** Valid username format: 3-20 chars, letters, digits or underscore. */
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
+/** Background colors used when generating initials-based avatars. */
+const AVATAR_PALETTE = ["6366f1", "8b5cf6", "ec4899", "f59e0b", "10b981", "3b82f6", "ef4444"];
+
+/**
+ * Generates a deterministic initials-based avatar URL via ui-avatars.com.
+ * No file upload or Firebase Storage required — the URL is the asset.
+ * The background color is derived from `seed` so the same user always gets
+ * the same color across registrations and profile fetches.
+ */
+function generateInitialsAvatar(displayName: string, seed: string): string {
+	let hash = 0;
+	for (let i = 0; i < seed.length; i++) hash = ((hash * 31) + seed.charCodeAt(i)) >>> 0;
+	const bg = AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+	return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=${bg}&color=fff&bold=true&size=128`;
+}
+
 /** Password rules: min 8 chars, at least one uppercase, one lowercase, one special character. */
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{8,}$/;
@@ -183,6 +199,8 @@ router.post("/signup", async (req, res) => {
 			password,
 		});
 
+		const avatarUrl = generateInitialsAvatar(`${name} ${lastName}`.trim(), lowerUsername);
+
 		// Write the public profile and the reverse lookup atomically.
 		const batch = db.batch();
 		batch.set(db.collection("users").doc(lowerUsername), {
@@ -192,6 +210,7 @@ router.post("/signup", async (req, res) => {
 			name,
 			lastName,
 			displayName: `${name} ${lastName}`.trim(),
+			avatarUrl,
 			provider: "password",
 			profileComplete: true,
 			createdAt: new Date(),
@@ -245,14 +264,19 @@ router.post("/complete-profile", async (req, res) => {
 		const resolvedName = (name as string | undefined)?.trim() || (decoded.name ?? "").split(" ")[0] || "";
 		const resolvedLastName = (lastName as string | undefined)?.trim() || (decoded.name ?? "").split(" ").slice(1).join(" ") || "";
 
+		const resolvedDisplayName = `${resolvedName} ${resolvedLastName}`.trim() || decoded.name || lowerUsername;
+		const resolvedAvatarUrl = (avatarUrl as string | undefined)
+			?? decoded.picture
+			?? generateInitialsAvatar(resolvedDisplayName, lowerUsername);
+
 		const profileData = {
 			uid,
 			email: decoded.email ?? null,
 			username: lowerUsername,
 			name: resolvedName,
 			lastName: resolvedLastName,
-			displayName: `${resolvedName} ${resolvedLastName}`.trim() || decoded.name || lowerUsername,
-			avatarUrl: (avatarUrl as string | undefined) ?? decoded.picture ?? null,
+			displayName: resolvedDisplayName,
+			avatarUrl: resolvedAvatarUrl,
 			provider: "google",
 			profileComplete: true,
 			createdAt: new Date(),
