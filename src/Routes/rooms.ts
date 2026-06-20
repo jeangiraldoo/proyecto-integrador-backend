@@ -265,8 +265,10 @@ router.patch("/:roomId", async (req, res) => {
 		await updateRoomName(db, roomId, uid, name);
 		return res.json({ id: roomId, name });
 	} catch (error) {
-		if (error instanceof RoomNotFoundError) return res.status(404).json({ error: (error as Error).message });
-		if (error instanceof ForbiddenError) return res.status(403).json({ error: (error as Error).message });
+		if (error instanceof RoomNotFoundError)
+			return res.status(404).json({ error: (error as Error).message });
+		if (error instanceof ForbiddenError)
+			return res.status(403).json({ error: (error as Error).message });
 		return res.status(500).json({ error: (error as Error).message });
 	}
 });
@@ -312,8 +314,10 @@ router.delete("/:roomId", async (req, res) => {
 		await deleteRoom(db, roomId, uid);
 		return res.status(204).send();
 	} catch (error) {
-		if (error instanceof RoomNotFoundError) return res.status(404).json({ error: (error as Error).message });
-		if (error instanceof ForbiddenError) return res.status(403).json({ error: (error as Error).message });
+		if (error instanceof RoomNotFoundError)
+			return res.status(404).json({ error: (error as Error).message });
+		if (error instanceof ForbiddenError)
+			return res.status(403).json({ error: (error as Error).message });
 		return res.status(500).json({ error: (error as Error).message });
 	}
 });
