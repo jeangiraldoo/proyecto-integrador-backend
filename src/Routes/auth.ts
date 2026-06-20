@@ -99,7 +99,7 @@ const AVATAR_PALETTE = ["6366f1", "8b5cf6", "ec4899", "f59e0b", "10b981", "3b82f
  */
 function generateInitialsAvatar(displayName: string, seed: string): string {
 	let hash = 0;
-	for (let i = 0; i < seed.length; i++) hash = ((hash * 31) + seed.charCodeAt(i)) >>> 0;
+	for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
 	const bg = AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 	return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=${bg}&color=fff&bold=true&size=128`;
 }
@@ -261,13 +261,19 @@ router.post("/complete-profile", async (req, res) => {
 
 		// Google token carries the display name; use it as fallback when the
 		// client does not send name/lastName explicitly.
-		const resolvedName = (name as string | undefined)?.trim() || (decoded.name ?? "").split(" ")[0] || "";
-		const resolvedLastName = (lastName as string | undefined)?.trim() || (decoded.name ?? "").split(" ").slice(1).join(" ") || "";
+		const resolvedName =
+			(name as string | undefined)?.trim() || (decoded.name ?? "").split(" ")[0] || "";
+		const resolvedLastName =
+			(lastName as string | undefined)?.trim() ||
+			(decoded.name ?? "").split(" ").slice(1).join(" ") ||
+			"";
 
-		const resolvedDisplayName = `${resolvedName} ${resolvedLastName}`.trim() || decoded.name || lowerUsername;
-		const resolvedAvatarUrl = (avatarUrl as string | undefined)
-			?? decoded.picture
-			?? generateInitialsAvatar(resolvedDisplayName, lowerUsername);
+		const resolvedDisplayName =
+			`${resolvedName} ${resolvedLastName}`.trim() || decoded.name || lowerUsername;
+		const resolvedAvatarUrl =
+			(avatarUrl as string | undefined) ??
+			decoded.picture ??
+			generateInitialsAvatar(resolvedDisplayName, lowerUsername);
 
 		const profileData = {
 			uid,
