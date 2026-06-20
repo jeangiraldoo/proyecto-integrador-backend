@@ -236,7 +236,10 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		try {
 			const decoded = await auth.verifyIdToken(token);
 			if (connectedUids.has(decoded.uid)) {
-				return next(new Error("User already connected"));
+				const err = Object.assign(new Error("User already connected"), {
+					data: { code: "auth/concurrent-session" },
+				});
+				return next(err);
 			}
 			// uids/{uid} is the reverse-lookup collection (uid → username)
 			const uidDoc = await db.collection("uids").doc(decoded.uid).get();
