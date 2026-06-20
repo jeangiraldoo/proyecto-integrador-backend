@@ -107,6 +107,15 @@ interface ServerToClientEvents {
 	call_ended: (payload: { fromUid: string }) => void;
 
 	/**
+	 * Broadcast to the room when a participant toggles their mic or camera.
+	 * Used to update media-state indicators in other participants' UIs.
+	 * @param payload.uid    UID of the peer who changed state.
+	 * @param payload.mic    true = mic active, false = muted.
+	 * @param payload.camera true = camera active, false = off.
+	 */
+	peer_media_toggled: (payload: { uid: string; mic: boolean; camera: boolean }) => void;
+
+	/**
 	 * Sent to the originating socket when any operation fails.
 	 * @param payload.message Human-readable description of the error.
 	 */
@@ -179,6 +188,14 @@ interface ClientToServerEvents {
 	 * @param payload.roomId Room whose call should be terminated.
 	 */
 	end_call: (payload: { roomId: string }) => void;
+
+	/**
+	 * Notify the room that this user toggled their mic or camera.
+	 * The server broadcasts the new state to all other participants.
+	 * @param payload.mic    true = mic active, false = muted.
+	 * @param payload.camera true = camera active, false = off.
+	 */
+	toggle_media: (payload: { mic: boolean; camera: boolean }) => void;
 }
 
 interface SocketData {
@@ -443,6 +460,15 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			if (typeof roomId !== "string" || !roomId.trim()) return;
 			socket.to(roomId).emit("call_ended", { fromUid: socket.data.uid });
 			console.log(`[socket] call_ended broadcast → room ${roomId} by ${socket.data.uid}`);
+		});
+
+		// --- toggle_media: broadcast mic/camera state to other room participants ---
+		socket.on("toggle_media", ({ mic, camera }) => {
+			if (typeof mic !== "boolean" || typeof camera !== "boolean") return;
+			for (const roomId of socket.rooms) {
+				if (roomId === socket.id) continue;
+				socket.to(roomId).emit("peer_media_toggled", { uid: socket.data.uid, mic, camera });
+			}
 		});
 
 		// disconnecting fires before the socket leaves its rooms, so socket.rooms is still populated.
