@@ -40,7 +40,12 @@ interface ServerToClientEvents {
 	 * @param payload.username  Display name of the user who joined.
 	 * @param payload.avatarUrl Profile picture URL, or null if the user has no avatar.
 	 */
-	participant_joined: (payload: { roomId: string; uid: string; username: string; avatarUrl: string | null }) => void;
+	participant_joined: (payload: {
+		roomId: string;
+		uid: string;
+		username: string;
+		avatarUrl: string | null;
+	}) => void;
 
 	/**
 	 * Broadcast to all remaining sockets in a room when a participant leaves or disconnects.
@@ -49,7 +54,12 @@ interface ServerToClientEvents {
 	 * @param payload.username  Display name of the user who left.
 	 * @param payload.avatarUrl Profile picture URL, or null if the user has no avatar.
 	 */
-	participant_left: (payload: { roomId: string; uid: string; username: string; avatarUrl: string | null }) => void;
+	participant_left: (payload: {
+		roomId: string;
+		uid: string;
+		username: string;
+		avatarUrl: string | null;
+	}) => void;
 
 	/**
 	 * Delivers a new chat message to every socket currently in the room.
@@ -64,7 +74,12 @@ interface ServerToClientEvents {
 	 * @param payload.roomId       Room where the call is happening.
 	 * @param payload.sdp          RTCSessionDescriptionInit (type: "offer").
 	 */
-	incoming_offer: (payload: { fromUid: string; fromUsername: string; roomId: string; sdp: RTCSessionDescriptionInit }) => void;
+	incoming_offer: (payload: {
+		fromUid: string;
+		fromUsername: string;
+		roomId: string;
+		sdp: RTCSessionDescriptionInit;
+	}) => void;
 
 	/**
 	 * Relayed WebRTC SDP answer from the callee accepting the offer.
@@ -72,7 +87,11 @@ interface ServerToClientEvents {
 	 * @param payload.roomId  Room where the call is happening.
 	 * @param payload.sdp     RTCSessionDescriptionInit (type: "answer").
 	 */
-	incoming_answer: (payload: { fromUid: string; roomId: string; sdp: RTCSessionDescriptionInit }) => void;
+	incoming_answer: (payload: {
+		fromUid: string;
+		roomId: string;
+		sdp: RTCSessionDescriptionInit;
+	}) => void;
 
 	/**
 	 * Relayed ICE candidate from a peer during WebRTC negotiation.
@@ -123,7 +142,11 @@ interface ClientToServerEvents {
 	 * @param payload.roomId    Room where the call takes place.
 	 * @param payload.sdp       RTCSessionDescriptionInit (type: "offer").
 	 */
-	webrtc_offer: (payload: { targetUid: string; roomId: string; sdp: RTCSessionDescriptionInit }) => void;
+	webrtc_offer: (payload: {
+		targetUid: string;
+		roomId: string;
+		sdp: RTCSessionDescriptionInit;
+	}) => void;
 
 	/**
 	 * Accept an incoming call by sending the SDP answer back to the caller.
@@ -132,7 +155,11 @@ interface ClientToServerEvents {
 	 * @param payload.roomId    Room where the call takes place.
 	 * @param payload.sdp       RTCSessionDescriptionInit (type: "answer").
 	 */
-	webrtc_answer: (payload: { targetUid: string; roomId: string; sdp: RTCSessionDescriptionInit }) => void;
+	webrtc_answer: (payload: {
+		targetUid: string;
+		roomId: string;
+		sdp: RTCSessionDescriptionInit;
+	}) => void;
 
 	/**
 	 * Share an ICE candidate with a specific peer during WebRTC negotiation.
@@ -173,7 +200,12 @@ function getRoomParticipants(io: SocketServer, roomId: string): Participant[] {
 	const participants: Participant[] = [];
 	for (const socketId of socketIds) {
 		const s = io.sockets.sockets.get(socketId);
-		if (s?.data.uid) participants.push({ uid: s.data.uid, username: s.data.username, avatarUrl: s.data.avatarUrl });
+		if (s?.data.uid)
+			participants.push({
+				uid: s.data.uid,
+				username: s.data.username,
+				avatarUrl: s.data.avatarUrl,
+			});
 	}
 	return participants;
 }
@@ -240,9 +272,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 					username: socket.data.username,
 					avatarUrl: socket.data.avatarUrl,
 				});
-				console.log(
-					`[socket] ${socket.data.username} joined room ${roomId} (isAdmin=${isAdmin})`,
-				);
+				console.log(`[socket] ${socket.data.username} joined room ${roomId} (isAdmin=${isAdmin})`);
 			} catch (error) {
 				if (error instanceof RoomNotFoundError) {
 					socket.emit("error", { message: error.message });
@@ -330,7 +360,9 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				roomId,
 				sdp,
 			});
-			console.log(`[socket] webrtc_offer relayed ${socket.data.uid} → ${targetUid} (room=${roomId})`);
+			console.log(
+				`[socket] webrtc_offer relayed ${socket.data.uid} → ${targetUid} (room=${roomId})`,
+			);
 		});
 
 		// --- webrtc_answer: relay SDP answer back to the caller ---
