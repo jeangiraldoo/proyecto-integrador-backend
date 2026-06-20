@@ -165,9 +165,14 @@ interface ClientToServerEvents {
 	 * Share an ICE candidate with a specific peer during WebRTC negotiation.
 	 * The server relays it as `incoming_ice_candidate` to the target socket.
 	 * @param payload.targetUid UID of the peer.
+	 * @param payload.roomId    Room where the call takes place (used for room isolation check).
 	 * @param payload.candidate RTCIceCandidateInit.
 	 */
-	webrtc_ice_candidate: (payload: { targetUid: string; candidate: RTCIceCandidateInit }) => void;
+	webrtc_ice_candidate: (payload: {
+		targetUid: string;
+		roomId: string;
+		candidate: RTCIceCandidateInit;
+	}) => void;
 
 	/**
 	 * Hang up the current call. Broadcasts `call_ended` to every socket in the room.
@@ -349,9 +354,24 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 
 		// --- webrtc_offer: relay SDP offer to the target peer ---
 		socket.on("webrtc_offer", ({ targetUid, roomId, sdp }) => {
+			if (
+				typeof targetUid !== "string" ||
+				!targetUid.trim() ||
+				typeof roomId !== "string" ||
+				!roomId.trim() ||
+				!sdp
+			) {
+				socket.emit("error", { message: "webrtc_offer: missing targetUid, roomId or sdp" });
+				return;
+			}
 			const targetSocketId = uidToSocketId.get(targetUid);
 			if (!targetSocketId) {
 				socket.emit("error", { message: "Target user is not connected" });
+				return;
+			}
+			const room = io.sockets.adapter.rooms.get(roomId);
+			if (!room?.has(socket.id) || !room.has(targetSocketId)) {
+				socket.emit("error", { message: "Both peers must be in the same room to signal" });
 				return;
 			}
 			io.to(targetSocketId).emit("incoming_offer", {
@@ -367,9 +387,24 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 
 		// --- webrtc_answer: relay SDP answer back to the caller ---
 		socket.on("webrtc_answer", ({ targetUid, roomId, sdp }) => {
+			if (
+				typeof targetUid !== "string" ||
+				!targetUid.trim() ||
+				typeof roomId !== "string" ||
+				!roomId.trim() ||
+				!sdp
+			) {
+				socket.emit("error", { message: "webrtc_answer: missing targetUid, roomId or sdp" });
+				return;
+			}
 			const targetSocketId = uidToSocketId.get(targetUid);
 			if (!targetSocketId) {
 				socket.emit("error", { message: "Target user is not connected" });
+				return;
+			}
+			const room = io.sockets.adapter.rooms.get(roomId);
+			if (!room?.has(socket.id) || !room.has(targetSocketId)) {
+				socket.emit("error", { message: "Both peers must be in the same room to signal" });
 				return;
 			}
 			io.to(targetSocketId).emit("incoming_answer", { fromUid: socket.data.uid, roomId, sdp });
@@ -377,9 +412,23 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		});
 
 		// --- webrtc_ice_candidate: relay ICE candidate to the target peer ---
-		socket.on("webrtc_ice_candidate", ({ targetUid, candidate }) => {
+		socket.on("webrtc_ice_candidate", ({ targetUid, roomId, candidate }) => {
+			if (
+				typeof targetUid !== "string" ||
+				!targetUid.trim() ||
+				typeof roomId !== "string" ||
+				!roomId.trim() ||
+				!candidate
+			) {
+				socket.emit("error", {
+					message: "webrtc_ice_candidate: missing targetUid, roomId or candidate",
+				});
+				return;
+			}
 			const targetSocketId = uidToSocketId.get(targetUid);
 			if (!targetSocketId) return;
+			const room = io.sockets.adapter.rooms.get(roomId);
+			if (!room?.has(socket.id) || !room.has(targetSocketId)) return;
 			io.to(targetSocketId).emit("incoming_ice_candidate", {
 				fromUid: socket.data.uid,
 				candidate,
@@ -389,7 +438,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		// --- end_call: notify everyone in the room that the call is over ---
 		socket.on("end_call", ({ roomId }) => {
 			if (typeof roomId !== "string" || !roomId.trim()) return;
-			io.to(roomId).emit("call_ended", { fromUid: socket.data.uid });
+			socket.to(roomId).emit("call_ended", { fromUid: socket.data.uid });
 			console.log(`[socket] call_ended broadcast → room ${roomId} by ${socket.data.uid}`);
 		});
 
