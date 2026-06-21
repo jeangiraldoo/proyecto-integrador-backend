@@ -1,7 +1,9 @@
 import { Router, Request, Response } from "express";
+import { AccessToken } from "livekit-server-sdk";
 import { auth, db } from "../firebase";
 import {
 	createRoom,
+	getRoomById,
 	getRoomsByUser,
 	getRoomMessages,
 	updateRoomName,
@@ -320,6 +322,78 @@ router.delete("/:roomId", async (req, res) => {
 			return res.status(403).json({ error: (error as Error).message });
 		return res.status(500).json({ error: (error as Error).message });
 	}
+});
+
+/**
+ * @swagger
+ * /rooms/{roomId}/token:
+ *   post:
+ *     tags:
+ *       - Rooms
+ *     summary: Generate a LiveKit access token for a room
+ *     description: >
+ *       Issues a signed JWT that grants the authenticated user permission to join
+ *       the LiveKit room whose name matches the Firestore room ID.
+ *       The frontend uses this token to connect directly to the LiveKit server.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Firestore room ID (used as the LiveKit room name).
+ *     responses:
+ *       200:
+ *         description: LiveKit access token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: Signed JWT to pass to the LiveKit client SDK.
+ *                 url:
+ *                   type: string
+ *                   description: LiveKit server WebSocket URL.
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Room not found
+ *       503:
+ *         description: LiveKit not configured on the server
+ */
+router.post("/:roomId/token", async (req, res) => {
+	const uid = await requireAuth(req, res);
+	if (!uid) return;
+
+	const { roomId } = req.params;
+
+	try {
+		await getRoomById(db, roomId, uid);
+	} catch (error) {
+		if (error instanceof RoomNotFoundError)
+			return res.status(404).json({ error: "Room not found" });
+		return res.status(500).json({ error: (error as Error).message });
+	}
+
+	const livekitUrl = process.env.LIVEKIT_URL;
+	const apiKey = process.env.LIVEKIT_API_KEY;
+	const apiSecret = process.env.LIVEKIT_API_SECRET;
+
+	if (!livekitUrl || !apiKey || !apiSecret) {
+		return res.status(503).json({ error: "LiveKit not configured" });
+	}
+
+	const uidDoc = await db.collection("uids").doc(uid).get();
+	const username = (uidDoc.data()?.username as string | undefined) ?? uid;
+
+	const at = new AccessToken(apiKey, apiSecret, { identity: uid, name: username });
+	at.addGrant({ roomJoin: true, room: roomId });
+
+	return res.json({ token: await at.toJwt(), url: livekitUrl });
 });
 
 export default router;
