@@ -327,7 +327,7 @@ router.delete("/:roomId", async (req, res) => {
 /**
  * @swagger
  * /rooms/{roomId}/token:
- *   post:
+ *   get:
  *     tags:
  *       - Rooms
  *     summary: Generate a LiveKit access token for a room
@@ -365,7 +365,7 @@ router.delete("/:roomId", async (req, res) => {
  *       503:
  *         description: LiveKit not configured on the server
  */
-router.post("/:roomId/token", async (req, res) => {
+router.get("/:roomId/token", async (req, res) => {
 	const uid = await requireAuth(req, res);
 	if (!uid) return;
 
