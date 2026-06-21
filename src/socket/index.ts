@@ -68,45 +68,6 @@ interface ServerToClientEvents {
 	receive_message: (message: ChatMessage) => void;
 
 	/**
-	 * Relayed WebRTC SDP offer from a peer initiating a call.
-	 * @param payload.fromUid      UID of the caller.
-	 * @param payload.fromUsername Display name of the caller.
-	 * @param payload.roomId       Room where the call is happening.
-	 * @param payload.sdp          RTCSessionDescriptionInit (type: "offer").
-	 */
-	incoming_offer: (payload: {
-		fromUid: string;
-		fromUsername: string;
-		roomId: string;
-		sdp: RTCSessionDescriptionInit;
-	}) => void;
-
-	/**
-	 * Relayed WebRTC SDP answer from the callee accepting the offer.
-	 * @param payload.fromUid UID of the callee.
-	 * @param payload.roomId  Room where the call is happening.
-	 * @param payload.sdp     RTCSessionDescriptionInit (type: "answer").
-	 */
-	incoming_answer: (payload: {
-		fromUid: string;
-		roomId: string;
-		sdp: RTCSessionDescriptionInit;
-	}) => void;
-
-	/**
-	 * Relayed ICE candidate from a peer during WebRTC negotiation.
-	 * @param payload.fromUid   UID of the sending peer.
-	 * @param payload.candidate RTCIceCandidateInit.
-	 */
-	incoming_ice_candidate: (payload: { fromUid: string; candidate: RTCIceCandidateInit }) => void;
-
-	/**
-	 * Broadcast to the whole room when any participant ends the call.
-	 * @param payload.fromUid UID of the peer who hung up.
-	 */
-	call_ended: (payload: { fromUid: string }) => void;
-
-	/**
 	 * Broadcast to the room when a participant toggles their mic or camera.
 	 * Used to update media-state indicators in other participants' UIs.
 	 * @param payload.uid    UID of the peer who changed state.
@@ -145,51 +106,6 @@ interface ClientToServerEvents {
 	send_message: (payload: { room_id: string; text: string }) => void;
 
 	/**
-	 * Initiate a WebRTC call by sending an SDP offer to a specific peer.
-	 * The server relays it as `incoming_offer` to the target socket.
-	 * @param payload.targetUid UID of the callee.
-	 * @param payload.roomId    Room where the call takes place.
-	 * @param payload.sdp       RTCSessionDescriptionInit (type: "offer").
-	 */
-	webrtc_offer: (payload: {
-		targetUid: string;
-		roomId: string;
-		sdp: RTCSessionDescriptionInit;
-	}) => void;
-
-	/**
-	 * Accept an incoming call by sending the SDP answer back to the caller.
-	 * The server relays it as `incoming_answer` to the target socket.
-	 * @param payload.targetUid UID of the caller.
-	 * @param payload.roomId    Room where the call takes place.
-	 * @param payload.sdp       RTCSessionDescriptionInit (type: "answer").
-	 */
-	webrtc_answer: (payload: {
-		targetUid: string;
-		roomId: string;
-		sdp: RTCSessionDescriptionInit;
-	}) => void;
-
-	/**
-	 * Share an ICE candidate with a specific peer during WebRTC negotiation.
-	 * The server relays it as `incoming_ice_candidate` to the target socket.
-	 * @param payload.targetUid UID of the peer.
-	 * @param payload.roomId    Room where the call takes place (used for room isolation check).
-	 * @param payload.candidate RTCIceCandidateInit.
-	 */
-	webrtc_ice_candidate: (payload: {
-		targetUid: string;
-		roomId: string;
-		candidate: RTCIceCandidateInit;
-	}) => void;
-
-	/**
-	 * Hang up the current call. Broadcasts `call_ended` to every socket in the room.
-	 * @param payload.roomId Room whose call should be terminated.
-	 */
-	end_call: (payload: { roomId: string }) => void;
-
-	/**
 	 * Notify the room that this user toggled their mic or camera.
 	 * The server broadcasts the new state to all other participants.
 	 * @param payload.mic    true = mic active, false = muted.
@@ -212,9 +128,6 @@ const MAX_MESSAGE_LENGTH = 2000;
  * Prevents the same user from opening a second concurrent socket.
  */
 const connectedUids = new Set<string>();
-
-/** Maps uid → socket.id so signaling messages can be routed to a specific peer. */
-const uidToSocketId = new Map<string, string>();
 
 /** Returns the list of authenticated participants currently joined to a room. */
 function getRoomParticipants(io: SocketServer, roomId: string): Participant[] {
@@ -274,7 +187,6 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 
 	io.on("connection", (socket) => {
 		connectedUids.add(socket.data.uid);
-		uidToSocketId.set(socket.data.uid, socket.id);
 		console.log(`[socket] connected ${socket.id} (uid=${socket.data.uid})`);
 
 		// --- join_room: validate room exists, subscribe socket, and emit role flag ---
@@ -372,96 +284,6 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			}
 		});
 
-		// --- webrtc_offer: relay SDP offer to the target peer ---
-		socket.on("webrtc_offer", ({ targetUid, roomId, sdp }) => {
-			if (
-				typeof targetUid !== "string" ||
-				!targetUid.trim() ||
-				typeof roomId !== "string" ||
-				!roomId.trim() ||
-				!sdp
-			) {
-				socket.emit("error", { message: "webrtc_offer: missing targetUid, roomId or sdp" });
-				return;
-			}
-			const targetSocketId = uidToSocketId.get(targetUid);
-			if (!targetSocketId) {
-				socket.emit("error", { message: "Target user is not connected" });
-				return;
-			}
-			const room = io.sockets.adapter.rooms.get(roomId);
-			if (!room?.has(socket.id) || !room.has(targetSocketId)) {
-				socket.emit("error", { message: "Both peers must be in the same room to signal" });
-				return;
-			}
-			io.to(targetSocketId).emit("incoming_offer", {
-				fromUid: socket.data.uid,
-				fromUsername: socket.data.username,
-				roomId,
-				sdp,
-			});
-			console.log(
-				`[socket] webrtc_offer relayed ${socket.data.uid} → ${targetUid} (room=${roomId})`,
-			);
-		});
-
-		// --- webrtc_answer: relay SDP answer back to the caller ---
-		socket.on("webrtc_answer", ({ targetUid, roomId, sdp }) => {
-			if (
-				typeof targetUid !== "string" ||
-				!targetUid.trim() ||
-				typeof roomId !== "string" ||
-				!roomId.trim() ||
-				!sdp
-			) {
-				socket.emit("error", { message: "webrtc_answer: missing targetUid, roomId or sdp" });
-				return;
-			}
-			const targetSocketId = uidToSocketId.get(targetUid);
-			if (!targetSocketId) {
-				socket.emit("error", { message: "Target user is not connected" });
-				return;
-			}
-			const room = io.sockets.adapter.rooms.get(roomId);
-			if (!room?.has(socket.id) || !room.has(targetSocketId)) {
-				socket.emit("error", { message: "Both peers must be in the same room to signal" });
-				return;
-			}
-			io.to(targetSocketId).emit("incoming_answer", { fromUid: socket.data.uid, roomId, sdp });
-			console.log(`[socket] webrtc_answer relayed ${socket.data.uid} → ${targetUid}`);
-		});
-
-		// --- webrtc_ice_candidate: relay ICE candidate to the target peer ---
-		socket.on("webrtc_ice_candidate", ({ targetUid, roomId, candidate }) => {
-			if (
-				typeof targetUid !== "string" ||
-				!targetUid.trim() ||
-				typeof roomId !== "string" ||
-				!roomId.trim() ||
-				!candidate
-			) {
-				socket.emit("error", {
-					message: "webrtc_ice_candidate: missing targetUid, roomId or candidate",
-				});
-				return;
-			}
-			const targetSocketId = uidToSocketId.get(targetUid);
-			if (!targetSocketId) return;
-			const room = io.sockets.adapter.rooms.get(roomId);
-			if (!room?.has(socket.id) || !room.has(targetSocketId)) return;
-			io.to(targetSocketId).emit("incoming_ice_candidate", {
-				fromUid: socket.data.uid,
-				candidate,
-			});
-		});
-
-		// --- end_call: notify everyone in the room that the call is over ---
-		socket.on("end_call", ({ roomId }) => {
-			if (typeof roomId !== "string" || !roomId.trim()) return;
-			socket.to(roomId).emit("call_ended", { fromUid: socket.data.uid });
-			console.log(`[socket] call_ended broadcast → room ${roomId} by ${socket.data.uid}`);
-		});
-
 		// --- toggle_media: broadcast mic/camera state to other room participants ---
 		socket.on("toggle_media", ({ mic, camera }) => {
 			if (typeof mic !== "boolean" || typeof camera !== "boolean") return;
@@ -486,7 +308,6 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 
 		socket.on("disconnect", () => {
 			connectedUids.delete(socket.data.uid);
-			uidToSocketId.delete(socket.data.uid);
 			console.log(`[socket] disconnected ${socket.id} (uid=${socket.data.uid})`);
 		});
 	});
