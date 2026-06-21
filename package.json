@@ -29,7 +29,6 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase-admin": "^13.10.0",
-    "livekit-server-sdk": "^2.15.5",
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
