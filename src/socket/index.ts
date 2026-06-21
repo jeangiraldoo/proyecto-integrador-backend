@@ -68,6 +68,15 @@ interface ServerToClientEvents {
 	receive_message: (message: ChatMessage) => void;
 
 	/**
+	 * Broadcast to the room when a participant toggles their mic or camera.
+	 * Used to update media-state indicators in other participants' UIs.
+	 * @param payload.uid    UID of the peer who changed state.
+	 * @param payload.mic    true = mic active, false = muted.
+	 * @param payload.camera true = camera active, false = off.
+	 */
+	peer_media_toggled: (payload: { uid: string; mic: boolean; camera: boolean }) => void;
+
+	/**
 	 * Sent to the originating socket when any operation fails.
 	 * @param payload.message Human-readable description of the error.
 	 */
@@ -95,6 +104,14 @@ interface ClientToServerEvents {
 	 * @param payload.text    Message text (max 2 000 characters).
 	 */
 	send_message: (payload: { room_id: string; text: string }) => void;
+
+	/**
+	 * Notify the room that this user toggled their mic or camera.
+	 * The server broadcasts the new state to all other participants.
+	 * @param payload.mic    true = mic active, false = muted.
+	 * @param payload.camera true = camera active, false = off.
+	 */
+	toggle_media: (payload: { mic: boolean; camera: boolean }) => void;
 }
 
 interface SocketData {
@@ -149,7 +166,10 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		try {
 			const decoded = await auth.verifyIdToken(token);
 			if (connectedUids.has(decoded.uid)) {
-				return next(new Error("User already connected"));
+				const err = Object.assign(new Error("User already connected"), {
+					data: { code: "auth/concurrent-session" },
+				});
+				return next(err);
 			}
 			// uids/{uid} is the reverse-lookup collection (uid → username)
 			const uidDoc = await db.collection("uids").doc(decoded.uid).get();
@@ -261,6 +281,15 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			} catch (error) {
 				console.error(`[socket] failed to persist message in room ${roomId}:`, error);
 				socket.emit("error", { message: "Failed to send message" });
+			}
+		});
+
+		// --- toggle_media: broadcast mic/camera state to other room participants ---
+		socket.on("toggle_media", ({ mic, camera }) => {
+			if (typeof mic !== "boolean" || typeof camera !== "boolean") return;
+			for (const roomId of socket.rooms) {
+				if (roomId === socket.id) continue;
+				socket.to(roomId).emit("peer_media_toggled", { uid: socket.data.uid, mic, camera });
 			}
 		});
 
