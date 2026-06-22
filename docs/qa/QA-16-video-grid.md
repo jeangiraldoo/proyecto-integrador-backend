@@ -27,14 +27,14 @@ llegada de mensajes no re-renderiza ni reinicia las etiquetas `<video>` del grid
 
 ## Casos de prueba — resultado de auditoría
 
-| ID    | Caso                                                                                   | Criterio | Resultado                                                                                         | Evidencia          |
-| ----- | -------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------- | ------------------ |
-| TC-01 | El grid se reestructura de forma reactiva al unirse/salir flujos remotos (1 → N)       | C3       | ✅ PASS — capturas con 1, 4 y 5 participantes; reorganización automática sin recargar             | `us09-grid-1/2/3`  |
-| TC-02 | Cada recuadro muestra nombre legible y estado de cámara (video / avatar fallback)      | C3       | ✅ PASS — tarjetas con nombre; cámara apagada → avatar/iniciales                                  | `us09-grid-2/3`    |
-| TC-03 | Soporte de ≥4 participantes concurrentes sin romper el layout (ajuste del docente)     | C3       | ✅ PASS — cuadrícula 2×2 (4) y multi-columna (5) sin desbordamiento                               | `us09-grid-2/3`    |
-| TC-04 | Responsividad en móvil / tablet / escritorio sin desbordamientos ni superposición      | C5       | ✅ PASS — layout viewport-safe (FE-13.2); el grid se adapta a distintos anchos                    | Captura responsive |
+| ID    | Caso                                                                                    | Criterio | Resultado                                                                                         | Evidencia          |
+| ----- | --------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------- | ------------------ |
+| TC-01 | El grid se reestructura de forma reactiva al unirse/salir flujos remotos (1 → N)        | C3       | ✅ PASS — capturas con 1, 4 y 5 participantes; reorganización automática sin recargar             | `us09-grid-1/2/3`  |
+| TC-02 | Cada recuadro muestra nombre legible y estado de cámara (video / avatar fallback)       | C3       | ✅ PASS — tarjetas con nombre; cámara apagada → avatar/iniciales                                  | `us09-grid-2/3`    |
+| TC-03 | Soporte de ≥4 participantes concurrentes sin romper el layout (ajuste del docente)      | C3       | ✅ PASS — cuadrícula 2×2 (4) y multi-columna (5) sin desbordamiento                               | `us09-grid-2/3`    |
+| TC-04 | Responsividad en móvil / tablet / escritorio sin desbordamientos ni superposición       | C5       | ✅ PASS — layout viewport-safe (FE-13.2); el grid se adapta a distintos anchos                    | Captura responsive |
 | TC-05 | Aislamiento Chat ↔ Video: enviar/recibir mensajes no reinicia ni parpadea el `<video>` | C3       | ✅ PASS — estado separado con Zustand (FE-13.1); el chat opera en paralelo sin re-render del grid | Recorrido manual   |
-| TC-06 | Disposición espacial coherente (heurísticas de Nielsen) y nombres siempre legibles     | C5       | ✅ PASS — jerarquía clara, recuadros uniformes, etiquetas legibles                                | Bitácora UX        |
+| TC-06 | Disposición espacial coherente (heurísticas de Nielsen) y nombres siempre legibles      | C5       | ✅ PASS — jerarquía clara, recuadros uniformes, etiquetas legibles                                | Bitácora UX        |
 
 ## Cómo ejecutar las pruebas
 
