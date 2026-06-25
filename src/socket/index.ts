@@ -21,6 +21,8 @@ interface Participant {
 	uid: string;
 	username: string;
 	avatarUrl: string | null;
+	isMuted: boolean;
+	isVideoOff: boolean;
 }
 
 interface ServerToClientEvents {
@@ -248,18 +250,28 @@ const connectedUids = new Set<string>();
 /** Maps uid → socket.id so signaling messages can be routed to a specific peer. */
 const uidToSocketId = new Map<string, string>();
 
+/** Last known media state per socket.id. Cleared on disconnect. */
+const mediaStateBySocketId = new Map<string, { isMuted: boolean; isVideoOff: boolean }>();
+
 /** Returns the list of authenticated participants currently joined to a room. */
 function getRoomParticipants(io: SocketServer, roomId: string): Participant[] {
 	const socketIds = io.sockets.adapter.rooms.get(roomId) ?? new Set<string>();
 	const participants: Participant[] = [];
 	for (const socketId of socketIds) {
 		const s = io.sockets.sockets.get(socketId);
-		if (s?.data.uid)
+		if (s?.data.uid) {
+			const mediaState = mediaStateBySocketId.get(socketId) ?? {
+				isMuted: false,
+				isVideoOff: false,
+			};
 			participants.push({
 				uid: s.data.uid,
 				username: s.data.username,
 				avatarUrl: s.data.avatarUrl,
+				isMuted: mediaState.isMuted,
+				isVideoOff: mediaState.isVideoOff,
 			});
+		}
 	}
 	return participants;
 }
