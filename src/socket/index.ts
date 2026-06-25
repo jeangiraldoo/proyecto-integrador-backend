@@ -510,6 +510,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				typeof isVideoOff !== "boolean"
 			)
 				return;
+			if (!socket.rooms.has(room_id)) return;
 			socket.to(room_id).emit("peer_media_state_changed", {
 				room_id,
 				socket_id: socket.id,
