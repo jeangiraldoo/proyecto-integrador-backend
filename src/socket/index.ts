@@ -116,6 +116,21 @@ interface ServerToClientEvents {
 	peer_media_toggled: (payload: { uid: string; mic: boolean; camera: boolean }) => void;
 
 	/**
+	 * Broadcast to the room when a participant changes their hardware state.
+	 * Retransmits the sender's socket_id so peers can map the change to the right video tile.
+	 * @param payload.room_id    Room the sender belongs to.
+	 * @param payload.socket_id  Server-assigned socket ID of the sender.
+	 * @param payload.isMuted    true = microphone is muted.
+	 * @param payload.isVideoOff true = camera is off.
+	 */
+	peer_media_state_changed: (payload: {
+		room_id: string;
+		socket_id: string;
+		isMuted: boolean;
+		isVideoOff: boolean;
+	}) => void;
+
+	/**
 	 * Sent to the originating socket when any operation fails.
 	 * @param payload.message Human-readable description of the error.
 	 */
@@ -196,6 +211,19 @@ interface ClientToServerEvents {
 	 * @param payload.camera true = camera active, false = off.
 	 */
 	toggle_media: (payload: { mic: boolean; camera: boolean }) => void;
+
+	/**
+	 * Notify the room that this user changed their hardware state (mic/camera).
+	 * The server retransmits to all other sockets in the specified room.
+	 * @param payload.room_id    Room to broadcast to.
+	 * @param payload.isMuted    true = microphone is muted.
+	 * @param payload.isVideoOff true = camera is off.
+	 */
+	media_state_changed: (payload: {
+		room_id: string;
+		isMuted: boolean;
+		isVideoOff: boolean;
+	}) => void;
 }
 
 interface SocketData {
@@ -469,6 +497,23 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				if (roomId === socket.id) continue;
 				socket.to(roomId).emit("peer_media_toggled", { uid: socket.data.uid, mic, camera });
 			}
+		});
+
+		// --- media_state_changed: relay hardware state to the rest of the room ---
+		socket.on("media_state_changed", ({ room_id, isMuted, isVideoOff }) => {
+			if (
+				typeof room_id !== "string" ||
+				!room_id.trim() ||
+				typeof isMuted !== "boolean" ||
+				typeof isVideoOff !== "boolean"
+			)
+				return;
+			socket.to(room_id).emit("peer_media_state_changed", {
+				room_id,
+				socket_id: socket.id,
+				isMuted,
+				isVideoOff,
+			});
 		});
 
 		// disconnecting fires before the socket leaves its rooms, so socket.rooms is still populated.
