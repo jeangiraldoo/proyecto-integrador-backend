@@ -108,7 +108,8 @@ interface ServerToClientEvents {
 
 	/**
 	 * Broadcast to the room when a participant toggles their mic or camera.
-	 * Used to update media-state indicators in other participants' UIs.
+	 * @deprecated Use `peer_media_state_changed` instead. Kept for backwards compatibility
+	 * while the frontend migrates. Will be removed once `toggle_media` is no longer emitted.
 	 * @param payload.uid    UID of the peer who changed state.
 	 * @param payload.mic    true = mic active, false = muted.
 	 * @param payload.camera true = camera active, false = off.
@@ -206,7 +207,8 @@ interface ClientToServerEvents {
 
 	/**
 	 * Notify the room that this user toggled their mic or camera.
-	 * The server broadcasts the new state to all other participants.
+	 * @deprecated Use `media_state_changed` instead. Kept for backwards compatibility
+	 * while the frontend migrates. Will be removed once the FE no longer emits this event.
 	 * @param payload.mic    true = mic active, false = muted.
 	 * @param payload.camera true = camera active, false = off.
 	 */
