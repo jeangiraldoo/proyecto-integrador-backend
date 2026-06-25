@@ -369,7 +369,7 @@ sharing" badge). No new signaling events are needed for screen sharing itself.
 
 ## Room isolation
 
-Every signaling and chat event is strictly scoped to a room. The server enforces isolation at two
+Every signaling and chat event is strictly scoped to a room. The server enforces isolation at three
 levels:
 
 **1. Socket.io room membership**
@@ -380,15 +380,19 @@ sockets subscribed to that specific room.
 
 **2. Peer-level check for WebRTC signaling**
 
-Before relaying `webrtc_offer`, `webrtc_answer`, and `webrtc_ice_candidate`, the server verifies
-that **both** the sender and the target peer are in the same room:
+Before relaying `webrtc_offer`, `webrtc_answer`, and `webrtc_ice_candidate`, the server resolves the
+target socket via `uidToSocketId` and verifies that **both** the sender and the target are in the
+same room:
 
 ```ts
-const room = io.sockets.adapter.rooms.get(roomId);
-if (!room?.has(socket.id) || !room.has(targetSocketId)) {
-  socket.emit("error", { message: "Both peers must be in the same room to signal" });
+const targetSocketId = uidToSocketId.get(targetUid);
+if (!targetSocketId) {
+  socket.emit("error", { message: "Target user is not connected" });
   return;
 }
+const room = io.sockets.adapter.rooms.get(roomId);
+if (!room?.has(socket.id) || !room.has(targetSocketId)) return;
+io.to(targetSocketId).emit("incoming_offer", { fromUid: socket.data.uid, ... });
 ```
 
 **3. Membership check for media state events**
