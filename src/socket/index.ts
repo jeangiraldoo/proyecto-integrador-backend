@@ -118,14 +118,16 @@ interface ServerToClientEvents {
 
 	/**
 	 * Broadcast to the room when a participant changes their hardware state.
-	 * Retransmits the sender's socket_id so peers can map the change to the right video tile.
+	 * Retransmits the sender's uid and socket_id so peers can map the change to the right video tile.
 	 * @param payload.room_id    Room the sender belongs to.
+	 * @param payload.uid        Firebase UID of the sender.
 	 * @param payload.socket_id  Server-assigned socket ID of the sender.
 	 * @param payload.isMuted    true = microphone is muted.
 	 * @param payload.isVideoOff true = camera is off.
 	 */
 	peer_media_state_changed: (payload: {
 		room_id: string;
+		uid: string;
 		socket_id: string;
 		isMuted: boolean;
 		isVideoOff: boolean;
@@ -513,6 +515,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			if (!socket.rooms.has(room_id)) return;
 			socket.to(room_id).emit("peer_media_state_changed", {
 				room_id,
+				uid: socket.data.uid,
 				socket_id: socket.id,
 				isMuted,
 				isVideoOff,
