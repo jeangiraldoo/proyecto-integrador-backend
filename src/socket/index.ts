@@ -514,6 +514,9 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				isMuted,
 				isVideoOff,
 			});
+			console.log(
+				`[socket] media_state_changed -> room ${room_id} (from=${socket.id}, muted=${isMuted}, videoOff=${isVideoOff})`,
+			);
 		});
 
 		// disconnecting fires before the socket leaves its rooms, so socket.rooms is still populated.
