@@ -525,6 +525,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			)
 				return;
 			if (!socket.rooms.has(room_id)) return;
+			mediaStateBySocketId.set(socket.id, { isMuted, isVideoOff });
 			socket.to(room_id).emit("peer_media_state_changed", {
 				room_id,
 				uid: socket.data.uid,
@@ -553,6 +554,7 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 		socket.on("disconnect", () => {
 			connectedUids.delete(socket.data.uid);
 			uidToSocketId.delete(socket.data.uid);
+			mediaStateBySocketId.delete(socket.id);
 			console.log(`[socket] disconnected ${socket.id} (uid=${socket.data.uid})`);
 		});
 	});
