@@ -29,11 +29,17 @@ interface ServerToClientEvents {
 	/**
 	 * Emitted after a successful `join_room`.
 	 * Includes the list of participants already in the room at the time of joining.
-	 * @param payload.roomId       The room the socket joined.
-	 * @param payload.isAdmin      `true` if the connected user is the room creator (host).
-	 * @param payload.participants Users already connected to the room at join time.
+	 * @param payload.roomId                The room the socket joined.
+	 * @param payload.isAdmin               `true` if the connected user is the room creator (host).
+	 * @param payload.participants          Users already connected to the room at join time.
+	 * @param payload.activeScreenShareUid  UID of the peer currently sharing their screen, or null.
 	 */
-	room_joined: (payload: { roomId: string; isAdmin: boolean; participants: Participant[] }) => void;
+	room_joined: (payload: {
+		roomId: string;
+		isAdmin: boolean;
+		participants: Participant[];
+		activeScreenShareUid: string | null;
+	}) => void;
 
 	/**
 	 * Broadcast to all other sockets in a room when a new participant joins.
@@ -136,6 +142,24 @@ interface ServerToClientEvents {
 	}) => void;
 
 	/**
+	 * Broadcast to the room when a participant starts or stops sharing their screen.
+	 * @param payload.roomId             Room where the change occurred.
+	 * @param payload.activeScreenShareUid UID of the peer now sharing, or null if sharing ended.
+	 */
+	peer_screen_share_changed: (payload: {
+		roomId: string;
+		activeScreenShareUid: string | null;
+	}) => void;
+
+	/**
+	 * Sent to the requesting socket when screen sharing is rejected because another
+	 * participant is already sharing.
+	 * @param payload.roomId            Room where the request was denied.
+	 * @param payload.activeScreenShareUid UID of the peer currently sharing.
+	 */
+	screen_share_denied: (payload: { roomId: string; activeScreenShareUid: string }) => void;
+
+	/**
 	 * Sent to the originating socket when any operation fails.
 	 * @param payload.message Human-readable description of the error.
 	 */
@@ -230,6 +254,19 @@ interface ClientToServerEvents {
 		isMuted: boolean;
 		isVideoOff: boolean;
 	}) => void;
+
+	/**
+	 * Request to start screen sharing in a room.
+	 * Server grants or denies based on whether another peer is already sharing.
+	 * @param payload.roomId Room where the user wants to share.
+	 */
+	screen_share_started: (payload: { roomId: string }) => void;
+
+	/**
+	 * Notify the server that the user stopped sharing their screen.
+	 * @param payload.roomId Room where sharing is ending.
+	 */
+	screen_share_ended: (payload: { roomId: string }) => void;
 }
 
 interface SocketData {
@@ -252,6 +289,9 @@ const uidToSocketId = new Map<string, string>();
 
 /** Last known media state per socket.id. Cleared on disconnect. */
 const mediaStateBySocketId = new Map<string, { isMuted: boolean; isVideoOff: boolean }>();
+
+/** Active screen sharer per room (roomId → uid). At most one sharer per room at a time. */
+const activeScreenShareByRoom = new Map<string, string>();
 
 /** Returns the list of authenticated participants currently joined to a room. */
 function getRoomParticipants(io: SocketServer, roomId: string): Participant[] {
@@ -332,8 +372,9 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 				// Snapshot participants BEFORE joining so the list sent to the newcomer
 				// does not include themselves.
 				const participants = getRoomParticipants(io, roomId);
+				const activeScreenShareUid = activeScreenShareByRoom.get(roomId) ?? null;
 				socket.join(roomId);
-				socket.emit("room_joined", { roomId, isAdmin, participants });
+				socket.emit("room_joined", { roomId, isAdmin, participants, activeScreenShareUid });
 				// Notify everyone already in the room that a new participant arrived.
 				socket.to(roomId).emit("participant_joined", {
 					roomId,
