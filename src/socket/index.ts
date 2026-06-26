@@ -579,6 +579,32 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			);
 		});
 
+		// --- screen_share_started: grant exclusive screen share or deny if room is occupied ---
+		socket.on("screen_share_started", ({ roomId }) => {
+			if (typeof roomId !== "string" || !roomId.trim()) return;
+			if (!socket.rooms.has(roomId)) return;
+			const current = activeScreenShareByRoom.get(roomId);
+			if (current && current !== socket.data.uid) {
+				socket.emit("screen_share_denied", { roomId, activeScreenShareUid: current });
+				return;
+			}
+			activeScreenShareByRoom.set(roomId, socket.data.uid);
+			io.to(roomId).emit("peer_screen_share_changed", {
+				roomId,
+				activeScreenShareUid: socket.data.uid,
+			});
+			console.log(`[socket] screen_share_started room=${roomId} by ${socket.data.uid}`);
+		});
+
+		// --- screen_share_ended: release the exclusive lock and notify the room ---
+		socket.on("screen_share_ended", ({ roomId }) => {
+			if (typeof roomId !== "string" || !roomId.trim()) return;
+			if (activeScreenShareByRoom.get(roomId) !== socket.data.uid) return;
+			activeScreenShareByRoom.delete(roomId);
+			io.to(roomId).emit("peer_screen_share_changed", { roomId, activeScreenShareUid: null });
+			console.log(`[socket] screen_share_ended room=${roomId} by ${socket.data.uid}`);
+		});
+
 		// disconnecting fires before the socket leaves its rooms, so socket.rooms is still populated.
 		socket.on("disconnecting", () => {
 			for (const roomId of socket.rooms) {
@@ -596,6 +622,13 @@ export function initSocket(httpServer: HttpServer, allowedOrigins: string[]): So
 			connectedUids.delete(socket.data.uid);
 			uidToSocketId.delete(socket.data.uid);
 			mediaStateBySocketId.delete(socket.id);
+			// Release screen share lock if this socket held it, and notify affected rooms.
+			for (const [roomId, sharerUid] of activeScreenShareByRoom) {
+				if (sharerUid === socket.data.uid) {
+					activeScreenShareByRoom.delete(roomId);
+					io.to(roomId).emit("peer_screen_share_changed", { roomId, activeScreenShareUid: null });
+				}
+			}
 			console.log(`[socket] disconnected ${socket.id} (uid=${socket.data.uid})`);
 		});
 	});
