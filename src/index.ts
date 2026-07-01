@@ -13,13 +13,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ?? "3000";
 
-export const allowedOrigins = [
-	"https://proyecto-integrador-frontend-psi.vercel.app",
-	"http://localhost:5173",
-	// Swagger UI is served from the API itself, so its requests carry this origin.
+const DEPLOYMENT_URLS = [
+	// Backend origin so Swagger UI (/docs) can make API requests
+	"https://proyecto-integrador-backend-k2tf.onrender.com",
+
+	process.env.FRONTEND_URL,
+];
+
+const LOCAL_ORIGINS = [
+	// Backend origin so Swagger UI (/docs) can make API requests.
 	"http://localhost:3000",
 	"http://127.0.0.1:3000",
+
+	"http://localhost:5173",
+	...DEPLOYMENT_URLS,
 ];
+
+export const allowedOrigins =
+	process.env.APP_ENV === "production" ? DEPLOYMENT_URLS : LOCAL_ORIGINS;
 
 app.use(
 	cors({
