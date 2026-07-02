@@ -101,19 +101,27 @@ npm start
 
 ## Environment variables
 
-| Variable            | Required | Description                                              |
-| ------------------- | -------- | -------------------------------------------------------- |
-| `PORT`              | No       | HTTP/WS listen port (default `3000`)                     |
-| `FRONTEND_ORIGIN`   | Yes      | Allowed CORS origin (e.g. `https://your-app.vercel.app`) |
-| `apiKey`            | Yes      | Firebase Web API key                                     |
-| `authDomain`        | Yes      | Firebase auth domain                                     |
-| `projectId`         | Yes      | Firebase project ID                                      |
-| `storageBucket`     | Yes      | Firebase storage bucket                                  |
-| `messagingSenderId` | Yes      | Firebase messaging sender ID                             |
-| `appId`             | Yes      | Firebase app ID                                          |
-
-> `serviceAccount.json` must be present at the project root. Download it from the Firebase console →
-> Project settings → Service accounts.
+| Variable                               | Required | Description                                              |
+| -------------------------------------- | -------- | -------------------------------------------------------- |
+| `PORT`                                 | No       | HTTP/WS listen port (default `3000`)                     |
+| `FRONTEND_URL`                         | Yes      | Allowed CORS origin (e.g. `https://your-app.vercel.app`) |
+| `apiKey`                               | Yes      | Firebase Web API key                                     |
+| `authDomain`                           | Yes      | Firebase auth domain                                     |
+| `projectId`                            | Yes      | Firebase project ID                                      |
+| `storageBucket`                        | Yes      | Firebase storage bucket                                  |
+| `messagingSenderId`                    | Yes      | Firebase messaging sender ID                             |
+| `appId`                                | Yes      | Firebase app ID                                          |
+| `FIREBASE_TYPE`                        | Yes      | Firebase account type                                    |
+| `FIREBASE_PRIVATE_KEY_ID`              | Yes      | Private Firebase id                                      |
+| `FIREBASE_PRIVATE_KEY`                 | Yes      | Private Firebase key                                     |
+| `FIREBASE_CLIENT_EMAIL`                | Yes      | Firebase client email                                    |
+| `FIREBASE_CLIENT_ID`                   | Yes      | Firebase client id                                       |
+| `FIREBASE_TOKEN_URI`                   | Yes      | URI Firebase token                                       |
+| `FIREBASE_AUTH_URI`                    | Yes      | URI Auth Firebase token                                  |
+| `FIREBASE_UNIVERSE_DOMAIN`             | Yes      | Firebase universe domain                                 |
+| `FIREBASE_AUTH_PROVIDER_X509_CERT_URL` | Yes      | Firebase authentication provider certificate URL         |
+| `FIREBASE_CLIENT_X509_CERT_URL`        | Yes      | Firebase client certificate URL                          |
+| `APP_ENV`                              | No       | The environment the app is in. "production" or "local"   |
 
 ---
 
