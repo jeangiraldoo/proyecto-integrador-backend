@@ -5,7 +5,8 @@
 - **Historia técnica:**
   [TS-05 #90 — Integración final, despliegues y cierre de producto](https://tree.taiga.io/project/santi4914-miniproyecto-2-proyecto-integrador/task/90)
 - **Tipo:** extracción **manual** de métricas UX (sin automatización E2E: no Cypress/Playwright).
-- **Fuente:** 5 grabaciones del User Testing del Sprint 6 (Entrevistas N.º 1 a N.º 5). — [Carpeta de grabaciones (Drive)](https://drive.google.com/drive/folders/12OXYh3g86ZxFYYOW44mRGsMopGkw7SHX?usp=drive_link)
+- **Fuente:** 5 grabaciones del User Testing del Sprint 6 (Entrevistas N.º 1 a N.º 5). —
+  [Carpeta de grabaciones (Drive)](https://drive.google.com/drive/folders/12OXYh3g86ZxFYYOW44mRGsMopGkw7SHX?usp=drive_link)
 
 ## Objetivo
 
