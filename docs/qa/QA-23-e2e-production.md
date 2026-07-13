@@ -72,9 +72,11 @@ Marca el resultado durante la ejecución en producción.
    bloqueos.
 2. (Opcional) Captura de la consola del navegador sin excepciones no controladas.
 
-> **Enlace al video E2E (producción):** [Video E2E en producción (Drive)](https://drive.google.com/drive/folders/12BlkFwimjQRMCgRs77d4V3jOwjCf7MDw?usp=sharing)
->
-> **Grabaciones del User Testing (5 sesiones):** [Carpeta de grabaciones (Drive)](https://drive.google.com/drive/folders/12OXYh3g86ZxFYYOW44mRGsMopGkw7SHX?usp=drive_link)
+**Enlace al video E2E (producción):**
+[Video E2E en producción (Drive)](https://drive.google.com/drive/folders/12BlkFwimjQRMCgRs77d4V3jOwjCf7MDw?usp=sharing)
+
+**Grabaciones del User Testing (5 sesiones):**
+[Carpeta de grabaciones (Drive)](https://drive.google.com/drive/folders/12OXYh3g86ZxFYYOW44mRGsMopGkw7SHX?usp=drive_link)
 
 ## Conclusión
 
